@@ -2,7 +2,7 @@
 
 # ============================================
 # Live24Jam - VPS Deployment Script
-# Ubuntu 24.04
+# Ubuntu 24.04 + FFmpeg Streaming
 # ============================================
 
 set -e
@@ -46,9 +46,19 @@ else
     print_warning "Node.js already installed: $(node -v)"
 fi
 
-# 3. Install PM2 globally
+# 3. Install FFmpeg
 echo ""
-echo "📦 Step 3: Installing PM2..."
+echo "🎬 Step 3: Installing FFmpeg..."
+if ! command -v ffmpeg &> /dev/null; then
+    sudo apt install -y ffmpeg
+    print_status "FFmpeg installed: $(ffmpeg -version | head -1)"
+else
+    print_warning "FFmpeg already installed: $(ffmpeg -version | head -1)"
+fi
+
+# 4. Install PM2 globally
+echo ""
+echo "📦 Step 4: Installing PM2..."
 if ! command -v pm2 &> /dev/null; then
     sudo npm install -g pm2
     print_status "PM2 installed"
@@ -56,9 +66,9 @@ else
     print_warning "PM2 already installed"
 fi
 
-# 4. Install Nginx
+# 5. Install Nginx
 echo ""
-echo "📦 Step 4: Installing Nginx..."
+echo "📦 Step 5: Installing Nginx..."
 if ! command -v nginx &> /dev/null; then
     sudo apt install -y nginx
     sudo systemctl enable nginx
@@ -68,9 +78,9 @@ else
     print_warning "Nginx already installed"
 fi
 
-# 5. Clone or update repository
+# 6. Clone or update repository
 echo ""
-echo "📦 Step 5: Setting up Live24Jam..."
+echo "📦 Step 6: Setting up Live24Jam..."
 APP_DIR="/var/www/live24jam"
 
 if [ -d "$APP_DIR" ]; then
@@ -85,42 +95,70 @@ else
 fi
 print_status "Repository ready"
 
-# 6. Install dependencies
+# 7. Create videos directory
 echo ""
-echo "📦 Step 6: Installing dependencies..."
+echo "📁 Step 7: Creating videos directory..."
+mkdir -p $APP_DIR/videos
+print_status "Videos directory created: $APP_DIR/videos"
+
+# 8. Setup environment variables
+echo ""
+echo "⚙️ Step 8: Setting up environment..."
+if [ ! -f "$APP_DIR/.env" ]; then
+    cat > $APP_DIR/.env << EOF
+API_PORT=3001
+VIDEOS_DIR=$APP_DIR/videos
+NEXT_PUBLIC_API_URL=http://localhost:3001
+EOF
+    print_status "Environment file created"
+else
+    print_warning "Environment file already exists"
+fi
+
+# 9. Install dependencies
+echo ""
+echo "📦 Step 9: Installing dependencies..."
 cd $APP_DIR
 npm install
 print_status "Dependencies installed"
 
-# 7. Build the application
+# 10. Build the application
 echo ""
-echo "🔨 Step 7: Building application..."
+echo "🔨 Step 10: Building application..."
 npm run build
 print_status "Build completed"
 
-# 8. Setup PM2
+# 11. Setup PM2 for both frontend and API
 echo ""
-echo "🚀 Step 8: Starting with PM2..."
+echo "🚀 Step 11: Starting services with PM2..."
 pm2 delete live24jam 2>/dev/null || true
-pm2 start npm --name "live24jam" -- start
-pm2 save
-print_status "Application started with PM2"
+pm2 delete live24jam-api 2>/dev/null || true
 
-# 9. Setup PM2 startup
+# Start Next.js frontend
+pm2 start npm --name "live24jam" -- start
+
+# Start API server
+pm2 start npm --name "live24jam-api" -- run server
+
+pm2 save
+print_status "Both services started with PM2"
+
+# 12. Setup PM2 startup
 echo ""
-echo "⚙️ Step 9: Configuring auto-start..."
+echo "⚙️ Step 12: Configuring auto-start..."
 pm2 startup systemd -u $USER --hp /home/$USER
 pm2 save
 print_status "Auto-start configured"
 
-# 10. Configure Nginx
+# 13. Configure Nginx
 echo ""
-echo "🌐 Step 10: Configuring Nginx..."
+echo "🌐 Step 13: Configuring Nginx..."
 sudo tee /etc/nginx/sites-available/live24jam > /dev/null <<EOF
 server {
     listen 80;
     server_name _;
 
+    # Frontend
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -132,6 +170,15 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
     }
+
+    # API Server
+    location /api/ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
 }
 EOF
 
@@ -141,9 +188,9 @@ sudo nginx -t
 sudo systemctl restart nginx
 print_status "Nginx configured"
 
-# 11. Configure firewall
+# 14. Configure firewall
 echo ""
-echo "🔒 Step 11: Configuring firewall..."
+echo "🔒 Step 14: Configuring firewall..."
 sudo ufw allow 'Nginx Full'
 sudo ufw allow OpenSSH
 sudo ufw --force enable
@@ -158,8 +205,13 @@ echo ""
 echo "Your Live24Jam is now running at:"
 echo -e "  ${GREEN}http://$(curl -s ifconfig.me)${NC}"
 echo ""
+echo "📁 Upload videos to: $APP_DIR/videos/"
+echo ""
 echo "Useful commands:"
-echo "  pm2 status          - Check app status"
-echo "  pm2 logs live24jam  - View logs"
-echo "  pm2 restart live24jam - Restart app"
+echo "  pm2 status              - Check all services"
+echo "  pm2 logs live24jam      - View frontend logs"
+echo "  pm2 logs live24jam-api  - View API logs"
+echo "  pm2 restart all         - Restart all services"
+echo ""
+echo "🎬 FFmpeg streaming ready!"
 echo ""

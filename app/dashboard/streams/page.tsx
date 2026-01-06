@@ -1,46 +1,145 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
-// Mock data for streams
-const initialStreams = [
-    { id: 1, title: "Relaxing Piano Music 24/7", platform: "youtube", status: "live", viewers: 127, quality: "1080p", startTime: "2024-01-06 08:00", video: "piano-relaxing.mp4" },
-    { id: 2, title: "Rain Sounds for Sleep", platform: "youtube", status: "live", viewers: 89, quality: "720p", startTime: "2024-01-06 12:00", video: "rain-sounds.mp4" },
-    { id: 3, title: "Lo-Fi Study Beats", platform: "facebook", status: "live", viewers: 45, quality: "1080p", startTime: "2024-01-06 14:00", video: "lofi-beats.mp4" },
-    { id: 4, title: "Nature Sounds", platform: "youtube", status: "scheduled", viewers: 0, quality: "4K", startTime: "2024-01-07 06:00", video: "nature.mp4" },
-    { id: 5, title: "ASMR Typing", platform: "youtube", status: "stopped", viewers: 0, quality: "1080p", startTime: "2024-01-05 20:00", video: "asmr-typing.mp4" },
-    { id: 6, title: "Jazz Coffee Shop", platform: "facebook", status: "stopped", viewers: 0, quality: "720p", startTime: "2024-01-05 10:00", video: "jazz-cafe.mp4" },
-];
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+interface Stream {
+    id: number;
+    title: string;
+    platform: string;
+    rtmpUrl: string;
+    streamKey: string;
+    videoFile: string;
+    quality: string;
+    status: string;
+    viewers: number;
+    isRunning?: boolean;
+    createdAt?: string;
+}
 
 export default function StreamsPage() {
-    const [streams, setStreams] = useState(initialStreams);
+    const [streams, setStreams] = useState<Stream[]>([]);
     const [filter, setFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<number | null>(null);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newStream, setNewStream] = useState({
+        title: "",
+        platform: "youtube",
+        rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+        streamKey: "",
+        videoFile: "",
+        quality: "1080p"
+    });
+
+    // Fetch streams from API
+    const fetchStreams = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/streams`);
+            if (response.ok) {
+                const data = await response.json();
+                setStreams(data);
+            }
+        } catch (error) {
+            console.error("Error fetching streams:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStreams();
+        // Poll for updates every 5 seconds
+        const interval = setInterval(fetchStreams, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     const filteredStreams = streams.filter((stream) => {
-        const matchesFilter = filter === "all" || stream.status === filter;
+        const status = stream.isRunning ? "live" : stream.status;
+        const matchesFilter = filter === "all" || status === filter;
         const matchesSearch = stream.title.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesFilter && matchesSearch;
     });
 
-    const toggleStream = (id: number) => {
-        setStreams(streams.map((stream) => {
-            if (stream.id === id) {
-                return {
-                    ...stream,
-                    status: stream.status === "live" ? "stopped" : "live",
-                    viewers: stream.status === "live" ? 0 : Math.floor(Math.random() * 100) + 10,
-                };
+    const toggleStream = async (id: number) => {
+        const stream = streams.find(s => s.id === id);
+        if (!stream) return;
+
+        setActionLoading(id);
+        try {
+            const action = stream.isRunning ? "stop" : "start";
+            const response = await fetch(`${API_URL}/api/streams/${id}/${action}`, {
+                method: "POST"
+            });
+
+            if (response.ok) {
+                await fetchStreams();
+            } else {
+                const error = await response.json();
+                alert(error.error || "Gagal mengubah status stream");
             }
-            return stream;
-        }));
+        } catch (error) {
+            console.error("Error toggling stream:", error);
+            alert("Gagal menghubungi server");
+        } finally {
+            setActionLoading(null);
+        }
     };
 
-    const deleteStream = (id: number) => {
-        if (confirm("Yakin mau hapus stream ini?")) {
-            setStreams(streams.filter((stream) => stream.id !== id));
+    const deleteStream = async (id: number) => {
+        if (!confirm("Yakin mau hapus stream ini?")) return;
+
+        try {
+            const response = await fetch(`${API_URL}/api/streams/${id}`, {
+                method: "DELETE"
+            });
+
+            if (response.ok) {
+                setStreams(streams.filter(s => s.id !== id));
+            }
+        } catch (error) {
+            console.error("Error deleting stream:", error);
         }
+    };
+
+    const addStream = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        try {
+            const response = await fetch(`${API_URL}/api/streams`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newStream)
+            });
+
+            if (response.ok) {
+                await fetchStreams();
+                setShowAddModal(false);
+                setNewStream({
+                    title: "",
+                    platform: "youtube",
+                    rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+                    streamKey: "",
+                    videoFile: "",
+                    quality: "1080p"
+                });
+            } else {
+                const error = await response.json();
+                alert(error.error || "Gagal menambah stream");
+            }
+        } catch (error) {
+            console.error("Error adding stream:", error);
+            alert("Gagal menghubungi server");
+        }
+    };
+
+    const platformRtmpUrls: Record<string, string> = {
+        youtube: "rtmp://a.rtmp.youtube.com/live2",
+        facebook: "rtmps://live-api-s.facebook.com:443/rtmp",
+        twitch: "rtmp://live.twitch.tv/app"
     };
 
     return (
@@ -51,9 +150,9 @@ export default function StreamsPage() {
                     <h1 className="text-2xl md:text-3xl font-bold">Live Streams</h1>
                     <p className="text-gray-400 mt-1">Kelola semua live streaming kamu di sini.</p>
                 </div>
-                <Link href="/dashboard/upload" className="btn-primary text-center">
+                <button onClick={() => setShowAddModal(true)} className="btn-primary text-center">
                     + Tambah Stream
-                </Link>
+                </button>
             </div>
 
             {/* Filters */}
@@ -79,8 +178,8 @@ export default function StreamsPage() {
                                 key={option.value}
                                 onClick={() => setFilter(option.value)}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === option.value
-                                        ? "bg-indigo-500 text-white"
-                                        : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                    ? "bg-indigo-500 text-white"
+                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
                                     }`}
                             >
                                 {option.label}
@@ -90,80 +189,204 @@ export default function StreamsPage() {
                 </div>
             </div>
 
+            {/* Loading State */}
+            {loading && (
+                <div className="card text-center py-12">
+                    <div className="animate-spin text-4xl mb-4">⏳</div>
+                    <p className="text-gray-400">Memuat streams...</p>
+                </div>
+            )}
+
             {/* Streams Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredStreams.map((stream) => (
-                    <div key={stream.id} className="card hover:border-indigo-500/50">
-                        {/* Preview */}
-                        <div className="aspect-video bg-gray-800 rounded-lg mb-4 relative overflow-hidden">
-                            <div className="absolute inset-0 flex items-center justify-center text-4xl">
-                                📺
+            {!loading && (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredStreams.map((stream) => (
+                        <div key={stream.id} className="card hover:border-indigo-500/50">
+                            {/* Preview */}
+                            <div className="aspect-video bg-gray-800 rounded-lg mb-4 relative overflow-hidden">
+                                <div className="absolute inset-0 flex items-center justify-center text-4xl">
+                                    📺
+                                </div>
+                                {stream.isRunning && (
+                                    <div className="absolute top-2 left-2 flex items-center gap-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
+                                        <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                                        LIVE
+                                    </div>
+                                )}
+                                {stream.status === "scheduled" && !stream.isRunning && (
+                                    <div className="absolute top-2 left-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded">
+                                        TERJADWAL
+                                    </div>
+                                )}
                             </div>
-                            {stream.status === "live" && (
-                                <div className="absolute top-2 left-2 flex items-center gap-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
-                                    <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                                    LIVE
-                                </div>
-                            )}
-                            {stream.status === "scheduled" && (
-                                <div className="absolute top-2 left-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded">
-                                    TERJADWAL
-                                </div>
-                            )}
-                            {stream.viewers > 0 && (
-                                <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                                    👁️ {stream.viewers}
-                                </div>
-                            )}
-                        </div>
 
-                        {/* Info */}
-                        <h3 className="font-semibold mb-2 truncate" title={stream.title}>
-                            {stream.title}
-                        </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-400 mb-4">
-                            <span className={stream.platform === "youtube" ? "text-red-400" : "text-blue-400"}>
-                                {stream.platform === "youtube" ? "YouTube" : "Facebook"}
-                            </span>
-                            <span>{stream.quality}</span>
-                            <span>{stream.video}</span>
-                        </div>
+                            {/* Info */}
+                            <h3 className="font-semibold mb-2 truncate" title={stream.title}>
+                                {stream.title}
+                            </h3>
+                            <div className="flex items-center gap-4 text-sm text-gray-400 mb-2">
+                                <span className={stream.platform === "youtube" ? "text-red-400" : stream.platform === "facebook" ? "text-blue-400" : "text-purple-400"}>
+                                    {stream.platform === "youtube" ? "YouTube" : stream.platform === "facebook" ? "Facebook" : "Twitch"}
+                                </span>
+                                <span>{stream.quality}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mb-4 truncate" title={stream.videoFile}>
+                                📁 {stream.videoFile}
+                            </p>
 
-                        {/* Actions */}
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => toggleStream(stream.id)}
-                                className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${stream.status === "live"
+                            {/* Actions */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => toggleStream(stream.id)}
+                                    disabled={actionLoading === stream.id}
+                                    className={`flex-1 py-2 rounded-lg font-medium text-sm transition-colors ${stream.isRunning
                                         ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                                         : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                                    }`}
-                            >
-                                {stream.status === "live" ? "⏹ Stop" : "▶️ Start"}
-                            </button>
-                            <button className="px-3 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors">
-                                ✏️
-                            </button>
-                            <button
-                                onClick={() => deleteStream(stream.id)}
-                                className="px-3 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors"
-                            >
-                                🗑️
-                            </button>
+                                        } ${actionLoading === stream.id ? "opacity-50 cursor-wait" : ""}`}
+                                >
+                                    {actionLoading === stream.id
+                                        ? "⏳ Loading..."
+                                        : stream.isRunning
+                                            ? "⏹ Stop"
+                                            : "▶️ Start"}
+                                </button>
+                                <button
+                                    onClick={() => deleteStream(stream.id)}
+                                    className="px-3 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                >
+                                    🗑️
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
 
-            {filteredStreams.length === 0 && (
+            {!loading && filteredStreams.length === 0 && (
                 <div className="card text-center py-12">
                     <span className="text-6xl block mb-4">📺</span>
                     <h3 className="text-xl font-semibold mb-2">Tidak ada stream ditemukan</h3>
                     <p className="text-gray-400 mb-4">
                         {searchQuery ? "Coba kata kunci lain" : "Mulai dengan menambahkan stream baru"}
                     </p>
-                    <Link href="/dashboard/upload" className="btn-primary inline-block">
+                    <button onClick={() => setShowAddModal(true)} className="btn-primary inline-block">
                         + Tambah Stream
-                    </Link>
+                    </button>
+                </div>
+            )}
+
+            {/* Add Stream Modal */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <div className="card max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold">Tambah Stream Baru</h2>
+                            <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white text-2xl">
+                                ×
+                            </button>
+                        </div>
+
+                        <form onSubmit={addStream} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Judul Stream</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newStream.title}
+                                    onChange={(e) => setNewStream({ ...newStream, title: e.target.value })}
+                                    placeholder="Contoh: Relaxing Piano Music 24/7"
+                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Platform</label>
+                                <select
+                                    value={newStream.platform}
+                                    onChange={(e) => setNewStream({
+                                        ...newStream,
+                                        platform: e.target.value,
+                                        rtmpUrl: platformRtmpUrls[e.target.value] || ""
+                                    })}
+                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                >
+                                    <option value="youtube">YouTube</option>
+                                    <option value="facebook">Facebook</option>
+                                    <option value="twitch">Twitch</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-2">RTMP URL</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newStream.rtmpUrl}
+                                    onChange={(e) => setNewStream({ ...newStream, rtmpUrl: e.target.value })}
+                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white font-mono text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Stream Key</label>
+                                <input
+                                    type="password"
+                                    required
+                                    value={newStream.streamKey}
+                                    onChange={(e) => setNewStream({ ...newStream, streamKey: e.target.value })}
+                                    placeholder="Paste stream key dari platform"
+                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    📌 Dapatkan stream key dari YouTube Studio / Facebook Live Producer
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Nama File Video</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newStream.videoFile}
+                                    onChange={(e) => setNewStream({ ...newStream, videoFile: e.target.value })}
+                                    placeholder="contoh: video.mp4"
+                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    📁 Upload video ke folder <code className="bg-gray-800 px-1 rounded">/var/www/live24jam/videos/</code>
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Kualitas</label>
+                                <select
+                                    value={newStream.quality}
+                                    onChange={(e) => setNewStream({ ...newStream, quality: e.target.value })}
+                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                >
+                                    <option value="720p">720p (HD)</option>
+                                    <option value="1080p">1080p (Full HD)</option>
+                                    <option value="4K">4K (Ultra HD)</option>
+                                </select>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddModal(false)}
+                                    className="flex-1 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium"
+                                >
+                                    Simpan Stream
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>
