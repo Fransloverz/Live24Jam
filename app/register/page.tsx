@@ -3,24 +3,53 @@
 import { useState } from "react";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export default function RegisterPage() {
-    const [name, setName] = useState("");
+    const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError("");
+
         if (password !== confirmPassword) {
-            alert("Password tidak cocok!");
+            setError("Password tidak cocok!");
             return;
         }
+
+        if (password.length < 6) {
+            setError("Password minimal 6 karakter!");
+            return;
+        }
+
         setIsLoading(true);
-        // Simulate registration - in real app, this would call an API
-        setTimeout(() => {
-            window.location.href = "/dashboard";
-        }, 1000);
+
+        try {
+            const response = await fetch(`${API_URL}/api/auth/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                localStorage.setItem("token", data.token);
+                localStorage.setItem("user", JSON.stringify(data.user));
+                window.location.href = "/dashboard";
+            } else {
+                setError(data.error || "Registrasi gagal");
+                setIsLoading(false);
+            }
+        } catch (err) {
+            setError("Gagal terhubung ke server");
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -44,18 +73,23 @@ export default function RegisterPage() {
 
                 {/* Register Form */}
                 <div className="card p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
+                            ⚠️ {error}
+                        </div>
+                    )}
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div>
-                            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
-                                Nama Lengkap
+                            <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+                                Username
                             </label>
                             <input
                                 type="text"
-                                id="name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                id="username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
                                 className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white placeholder-gray-500 transition-colors"
-                                placeholder="John Doe"
+                                placeholder="username"
                                 required
                             />
                         </div>

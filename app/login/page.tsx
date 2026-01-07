@@ -3,18 +3,41 @@
 import { useState } from "react";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export default function LoginPage() {
-    const [email, setEmail] = useState("");
+    const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate login - in real app, this would call an API
-        setTimeout(() => {
-            window.location.href = "/dashboard";
-        }, 1000);
+        setError("");
+
+        try {
+            const response = await fetch(`${API_URL}/api/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Store token and user info
+                localStorage.setItem("token", data.token);
+                localStorage.setItem("user", JSON.stringify(data.user));
+                window.location.href = "/dashboard";
+            } else {
+                setError(data.error || "Login gagal");
+                setIsLoading(false);
+            }
+        } catch (err) {
+            setError("Gagal terhubung ke server");
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -37,18 +60,23 @@ export default function LoginPage() {
                 </div>
                 {/* Login Form */}
                 <div className="card p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
+                            ⚠️ {error}
+                        </div>
+                    )}
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                                Email
+                            <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+                                Username
                             </label>
                             <input
-                                type="email"
-                                id="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                type="text"
+                                id="username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
                                 className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white placeholder-gray-500 transition-colors"
-                                placeholder="nama@email.com"
+                                placeholder="username"
                                 required
                             />
                         </div>

@@ -1,18 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+interface User {
+    id: number;
+    username: string;
+    email: string;
+    role: string;
+}
 
 const menuItems = [
     { name: "Dashboard", icon: "📊", href: "/dashboard" },
     { name: "Live Streams", icon: "📺", href: "/dashboard/streams" },
     { name: "Upload Video", icon: "📤", href: "/dashboard/upload" },
+    { name: "Stream Logs", icon: "📋", href: "/dashboard/logs" },
     { name: "Jadwal", icon: "📅", href: "/dashboard/schedule" },
     { name: "Pengaturan", icon: "⚙️", href: "/dashboard/settings" },
 ];
 
-function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+function Sidebar({ isOpen, onClose, user, onLogout }: {
+    isOpen: boolean;
+    onClose: () => void;
+    user: User | null;
+    onLogout: () => void;
+}) {
     const pathname = usePathname();
 
     return (
@@ -28,12 +43,12 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
             {/* Sidebar */}
             <aside className={`
         fixed top-0 left-0 h-full w-64 bg-gray-900 border-r border-gray-800 z-50
-        transform transition-transform duration-300 ease-in-out
+        transform transition-transform duration-300 ease-in-out flex flex-col
         lg:translate-x-0 lg:static
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
                 {/* Logo */}
-                <div className="p-6 border-b border-gray-800">
+                <div className="p-6 border-b border-gray-800 flex-shrink-0">
                     <Link href="/" className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
                             <span className="text-white font-bold text-sm">24</span>
@@ -42,8 +57,8 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
                     </Link>
                 </div>
 
-                {/* Menu */}
-                <nav className="p-4">
+                {/* Menu - Scrollable Area */}
+                <nav className="p-4 flex-1 overflow-y-auto">
                     <ul className="space-y-2">
                         {menuItems.map((item) => {
                             const isActive = pathname === item.href;
@@ -69,21 +84,25 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
                     </ul>
                 </nav>
 
-                {/* User Info */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
+                {/* User Info - Fixed at Bottom */}
+                <div className="p-4 border-t border-gray-800 flex-shrink-0 bg-gray-900">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold">
-                            U
+                            {user?.username?.charAt(0).toUpperCase() || "U"}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="font-medium text-white truncate">User Demo</div>
-                            <div className="text-xs text-gray-500 truncate">user@demo.com</div>
+                            <div className="font-medium text-white truncate">{user?.username || "Guest"}</div>
+                            <div className="text-xs text-gray-500 truncate">{user?.email || "Not logged in"}</div>
                         </div>
-                        <Link href="/login" className="text-gray-400 hover:text-white p-2">
+                        <button
+                            onClick={onLogout}
+                            className="text-gray-400 hover:text-red-400 p-2 transition-colors"
+                            title="Logout"
+                        >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                             </svg>
-                        </Link>
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -91,7 +110,7 @@ function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
     );
 }
 
-function Header({ onMenuClick }: { onMenuClick: () => void }) {
+function Header({ onMenuClick, user }: { onMenuClick: () => void; user: User | null }) {
     return (
         <header className="h-16 border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-30">
             <div className="h-full px-4 flex items-center justify-between">
@@ -121,6 +140,11 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-4">
+                    {user && (
+                        <span className="hidden sm:block text-sm text-gray-400">
+                            👋 Halo, <span className="text-indigo-400 font-medium">{user.username}</span>
+                        </span>
+                    )}
                     <button className="relative p-2 text-gray-400 hover:text-white">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -142,12 +166,70 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+    useEffect(() => {
+        // Check authentication
+        const token = localStorage.getItem("token");
+        const userData = localStorage.getItem("user");
+
+        if (!token || !userData) {
+            // Not logged in, redirect to login
+            router.push("/login");
+            return;
+        }
+
+        // Verify token with server
+        fetch(`${API_URL}/api/auth/verify`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(res => {
+                if (res.ok) {
+                    return res.json();
+                }
+                throw new Error("Invalid token");
+            })
+            .then(data => {
+                setUser(data.user);
+                setLoading(false);
+            })
+            .catch(() => {
+                // Token invalid, clear and redirect
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+                router.push("/login");
+            });
+    }, [router]);
+
+    const handleLogout = () => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        router.push("/login");
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-950">
+                <div className="text-center">
+                    <div className="animate-spin text-5xl mb-4">⏳</div>
+                    <p className="text-gray-400">Memverifikasi sesi...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex">
-            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+            <Sidebar
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+                user={user}
+                onLogout={handleLogout}
+            />
             <div className="flex-1 flex flex-col min-w-0">
-                <Header onMenuClick={() => setSidebarOpen(true)} />
+                <Header onMenuClick={() => setSidebarOpen(true)} user={user} />
                 <main className="flex-1 p-4 md:p-6 overflow-auto">
                     {children}
                 </main>

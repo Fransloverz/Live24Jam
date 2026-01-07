@@ -5,6 +5,46 @@ import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+// Platform presets with RTMP URLs
+const PLATFORM_PRESETS = {
+    youtube: {
+        name: "YouTube",
+        icon: "🔴",
+        rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+        color: "text-red-400"
+    },
+    facebook: {
+        name: "Facebook",
+        icon: "🔵",
+        rtmpUrl: "rtmp://live-api-s.facebook.com:443/rtmp/",
+        color: "text-blue-400"
+    },
+    tiktok: {
+        name: "TikTok",
+        icon: "🎵",
+        rtmpUrl: "rtmp://push.tiktok.com/live/",
+        color: "text-pink-400"
+    },
+    twitch: {
+        name: "Twitch",
+        icon: "💜",
+        rtmpUrl: "rtmp://live.twitch.tv/app/",
+        color: "text-purple-400"
+    },
+    instagram: {
+        name: "Instagram",
+        icon: "📷",
+        rtmpUrl: "rtmp://live-upload.instagram.com/rtmp/",
+        color: "text-pink-500"
+    },
+    custom: {
+        name: "Custom RTMP",
+        icon: "⚙️",
+        rtmpUrl: "",
+        color: "text-gray-400"
+    }
+};
+
 interface Stream {
     id: number;
     title: string;
@@ -19,8 +59,18 @@ interface Stream {
     createdAt?: string;
 }
 
+interface VideoFile {
+    name: string;
+    size: number;
+    sizeFormatted: string;
+    modified: string;
+    extension: string;
+}
+
 export default function StreamsPage() {
     const [streams, setStreams] = useState<Stream[]>([]);
+    const [videos, setVideos] = useState<VideoFile[]>([]);
+    const [videosLoading, setVideosLoading] = useState(false);
     const [filter, setFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
@@ -29,11 +79,21 @@ export default function StreamsPage() {
     const [newStream, setNewStream] = useState({
         title: "",
         platform: "youtube",
-        rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+        rtmpUrl: PLATFORM_PRESETS.youtube.rtmpUrl,
         streamKey: "",
         videoFile: "",
         quality: "1080p"
     });
+
+    // Handle platform change - auto-fill RTMP URL
+    const handlePlatformChange = (platform: string) => {
+        const preset = PLATFORM_PRESETS[platform as keyof typeof PLATFORM_PRESETS];
+        setNewStream({
+            ...newStream,
+            platform,
+            rtmpUrl: preset?.rtmpUrl || ""
+        });
+    };
 
     // Fetch streams from API
     const fetchStreams = async () => {
@@ -50,12 +110,35 @@ export default function StreamsPage() {
         }
     };
 
+    // Fetch available videos from API
+    const fetchVideos = async () => {
+        setVideosLoading(true);
+        try {
+            const response = await fetch(`${API_URL}/api/videos`);
+            if (response.ok) {
+                const data = await response.json();
+                setVideos(data);
+            }
+        } catch (error) {
+            console.error("Error fetching videos:", error);
+        } finally {
+            setVideosLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchStreams();
         // Poll for updates every 5 seconds
         const interval = setInterval(fetchStreams, 5000);
         return () => clearInterval(interval);
     }, []);
+
+    // Fetch videos when modal opens
+    useEffect(() => {
+        if (showAddModal) {
+            fetchVideos();
+        }
+    }, [showAddModal]);
 
     const filteredStreams = streams.filter((stream) => {
         const status = stream.isRunning ? "live" : stream.status;
@@ -225,8 +308,9 @@ export default function StreamsPage() {
                                 {stream.title}
                             </h3>
                             <div className="flex items-center gap-4 text-sm text-gray-400 mb-2">
-                                <span className={stream.platform === "youtube" ? "text-red-400" : stream.platform === "facebook" ? "text-blue-400" : "text-purple-400"}>
-                                    {stream.platform === "youtube" ? "YouTube" : stream.platform === "facebook" ? "Facebook" : "Twitch"}
+                                <span className={PLATFORM_PRESETS[stream.platform as keyof typeof PLATFORM_PRESETS]?.color || "text-gray-400"}>
+                                    {PLATFORM_PRESETS[stream.platform as keyof typeof PLATFORM_PRESETS]?.icon || "📺"}{" "}
+                                    {PLATFORM_PRESETS[stream.platform as keyof typeof PLATFORM_PRESETS]?.name || stream.platform}
                                 </span>
                                 <span>{stream.quality}</span>
                             </div>
@@ -303,16 +387,14 @@ export default function StreamsPage() {
                                 <label className="block text-sm font-medium mb-2">Platform</label>
                                 <select
                                     value={newStream.platform}
-                                    onChange={(e) => setNewStream({
-                                        ...newStream,
-                                        platform: e.target.value,
-                                        rtmpUrl: platformRtmpUrls[e.target.value] || ""
-                                    })}
+                                    onChange={(e) => handlePlatformChange(e.target.value)}
                                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
                                 >
-                                    <option value="youtube">YouTube</option>
-                                    <option value="facebook">Facebook</option>
-                                    <option value="twitch">Twitch</option>
+                                    {Object.entries(PLATFORM_PRESETS).map(([key, preset]) => (
+                                        <option key={key} value={key}>
+                                            {preset.icon} {preset.name}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -343,18 +425,47 @@ export default function StreamsPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-2">Nama File Video</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={newStream.videoFile}
-                                    onChange={(e) => setNewStream({ ...newStream, videoFile: e.target.value })}
-                                    placeholder="contoh: video.mp4"
-                                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                    📁 Upload video ke folder <code className="bg-gray-800 px-1 rounded">/var/www/live24jam/videos/</code>
-                                </p>
+                                <label className="block text-sm font-medium mb-2">
+                                    Pilih Video
+                                    <button
+                                        type="button"
+                                        onClick={fetchVideos}
+                                        className="ml-2 text-xs text-indigo-400 hover:text-indigo-300"
+                                    >
+                                        🔄 Refresh
+                                    </button>
+                                </label>
+                                {videosLoading ? (
+                                    <div className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 text-center">
+                                        <span className="animate-pulse">⏳ Memuat daftar video...</span>
+                                    </div>
+                                ) : videos.length > 0 ? (
+                                    <select
+                                        required
+                                        value={newStream.videoFile}
+                                        onChange={(e) => setNewStream({ ...newStream, videoFile: e.target.value })}
+                                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                    >
+                                        <option value="">-- Pilih Video --</option>
+                                        {videos.map((video) => (
+                                            <option key={video.name} value={video.name}>
+                                                📹 {video.name} ({video.sizeFormatted})
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <div className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-center">
+                                        <p className="text-gray-400 text-sm">⚠️ Tidak ada video ditemukan</p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Upload video ke folder <code className="bg-gray-700 px-1 rounded">videos/</code>
+                                        </p>
+                                    </div>
+                                )}
+                                {newStream.videoFile && (
+                                    <p className="text-xs text-green-400 mt-1">
+                                        ✅ Dipilih: {newStream.videoFile}
+                                    </p>
+                                )}
                             </div>
 
                             <div>

@@ -166,16 +166,20 @@ router.post('/:id/stop', (req, res) => {
     res.json({ message: 'Stream stopped' });
 });
 
-// GET /api/streams/:id/status - Get stream status
+// GET /api/streams/:id/status - Get stream status with logs
 router.get('/:id/status', (req, res) => {
     const streamId = parseInt(req.params.id);
     const isRunning = ffmpegService.isStreamRunning(streamId);
     const logs = ffmpegService.getStreamLogs(streamId);
+    const streamInfo = ffmpegService.getStreamInfo(streamId);
 
     res.json({
         streamId,
         isRunning,
-        logs: logs.slice(-20) // Last 20 log lines
+        mode: streamInfo?.mode || null,
+        uptime: streamInfo?.uptimeFormatted || null,
+        startTime: streamInfo?.startTime || null,
+        logs: logs.slice(-100) // Last 100 log lines
     });
 });
 

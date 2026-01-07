@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 // Mock data for demo
 const stats = [
@@ -25,7 +28,83 @@ const activityLog = [
     { time: "5 jam lalu", action: "Jadwal dibuat", stream: "Night Ambience" },
 ];
 
+interface SystemInfo {
+    cpu: {
+        model: string;
+        cores: number;
+        speed: number;
+        usage: number;
+        speedGHz: string;
+    };
+    memory: {
+        total: number;
+        free: number;
+        used: number;
+        usagePercent: number;
+        totalGB: string;
+        usedGB: string;
+        freeGB: string;
+    };
+    disk: {
+        total: number;
+        free: number;
+        used: number;
+        usagePercent: number;
+        totalGB: string;
+        usedGB: string;
+        freeGB: string;
+    };
+    network: {
+        interfaces: Array<{ name: string; ip: string; mac: string }>;
+        primaryIP: string;
+    };
+    system: {
+        platform: string;
+        hostname: string;
+        uptime: number;
+        uptimeFormatted: string;
+        arch: string;
+        loadAverage: number[];
+    };
+}
+
 export default function DashboardPage() {
+    const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+    const [systemLoading, setSystemLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchSystemInfo = async () => {
+            try {
+                const response = await fetch(`${API_URL}/api/system`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setSystemInfo(data);
+                }
+            } catch (error) {
+                console.error("Error fetching system info:", error);
+            } finally {
+                setSystemLoading(false);
+            }
+        };
+
+        fetchSystemInfo();
+        // Refresh every 5 seconds
+        const interval = setInterval(fetchSystemInfo, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const getUsageColor = (percent: number) => {
+        if (percent >= 90) return "bg-red-500";
+        if (percent >= 70) return "bg-yellow-500";
+        return "bg-green-500";
+    };
+
+    const getUsageTextColor = (percent: number) => {
+        if (percent >= 90) return "text-red-400";
+        if (percent >= 70) return "text-yellow-400";
+        return "text-green-400";
+    };
+
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -37,6 +116,148 @@ export default function DashboardPage() {
                 <Link href="/dashboard/upload" className="btn-primary text-center">
                     + Tambah Stream Baru
                 </Link>
+            </div>
+
+            {/* VPS Specifications Card */}
+            <div className="card bg-gradient-to-br from-gray-900/80 to-gray-800/50 border-indigo-500/30">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <span className="text-2xl">🖥️</span>
+                        Spesifikasi VPS
+                    </h2>
+                    {systemInfo && (
+                        <span className="text-xs text-gray-500">
+                            Uptime: {systemInfo.system.uptimeFormatted}
+                        </span>
+                    )}
+                </div>
+
+                {systemLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin text-3xl">⏳</div>
+                        <span className="ml-2 text-gray-400">Memuat info sistem...</span>
+                    </div>
+                ) : systemInfo ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* CPU */}
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-gray-400 text-sm">CPU</span>
+                                <span className="text-2xl">⚡</span>
+                            </div>
+                            <p className="text-xl font-bold mb-1">{systemInfo.cpu.cores} Cores</p>
+                            <p className="text-xs text-gray-500 truncate mb-2" title={systemInfo.cpu.model}>
+                                {systemInfo.cpu.model.split(' ').slice(0, 3).join(' ')}
+                            </p>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">Penggunaan</span>
+                                <span className={getUsageTextColor(systemInfo.cpu.usage)}>
+                                    {systemInfo.cpu.usage}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-700 rounded-full h-2 mt-1">
+                                <div
+                                    className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(systemInfo.cpu.usage)}`}
+                                    style={{ width: `${systemInfo.cpu.usage}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Kecepatan: {systemInfo.cpu.speedGHz} GHz
+                            </p>
+                        </div>
+
+                        {/* Memory */}
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-gray-400 text-sm">RAM</span>
+                                <span className="text-2xl">🧠</span>
+                            </div>
+                            <p className="text-xl font-bold mb-1">{systemInfo.memory.totalGB} GB</p>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Terpakai: {systemInfo.memory.usedGB} GB
+                            </p>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">Penggunaan</span>
+                                <span className={getUsageTextColor(systemInfo.memory.usagePercent)}>
+                                    {systemInfo.memory.usagePercent}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-700 rounded-full h-2 mt-1">
+                                <div
+                                    className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(systemInfo.memory.usagePercent)}`}
+                                    style={{ width: `${systemInfo.memory.usagePercent}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Tersedia: {systemInfo.memory.freeGB} GB
+                            </p>
+                        </div>
+
+                        {/* Storage */}
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-gray-400 text-sm">Storage</span>
+                                <span className="text-2xl">💾</span>
+                            </div>
+                            <p className="text-xl font-bold mb-1">{systemInfo.disk.totalGB} GB</p>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Terpakai: {systemInfo.disk.usedGB} GB
+                            </p>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">Penggunaan</span>
+                                <span className={getUsageTextColor(systemInfo.disk.usagePercent)}>
+                                    {systemInfo.disk.usagePercent}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-700 rounded-full h-2 mt-1">
+                                <div
+                                    className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(systemInfo.disk.usagePercent)}`}
+                                    style={{ width: `${systemInfo.disk.usagePercent}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                                Tersedia: {systemInfo.disk.freeGB} GB
+                            </p>
+                        </div>
+
+                        {/* Network / System Info */}
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-gray-400 text-sm">Network</span>
+                                <span className="text-2xl">🌐</span>
+                            </div>
+                            <p className="text-xl font-bold mb-1 font-mono text-sm">
+                                {systemInfo.network.primaryIP}
+                            </p>
+                            <p className="text-xs text-gray-500 mb-2">
+                                Host: {systemInfo.system.hostname}
+                            </p>
+                            <div className="flex items-center justify-between text-sm mb-1">
+                                <span className="text-gray-400">Platform</span>
+                                <span className="text-indigo-400 capitalize">
+                                    {systemInfo.system.platform === 'win32' ? 'Windows' :
+                                        systemInfo.system.platform === 'linux' ? 'Linux' :
+                                            systemInfo.system.platform === 'darwin' ? 'macOS' :
+                                                systemInfo.system.platform}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">Arsitektur</span>
+                                <span className="text-indigo-400">{systemInfo.system.arch}</span>
+                            </div>
+                            {systemInfo.system.loadAverage[0] > 0 && (
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Load: {systemInfo.system.loadAverage.map(l => l.toFixed(2)).join(', ')}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-gray-400">
+                        <p>⚠️ Tidak dapat memuat informasi sistem.</p>
+                        <p className="text-sm mt-1">Pastikan backend server berjalan di port 3001.</p>
+                    </div>
+                )}
             </div>
 
             {/* Stats Grid */}
@@ -95,8 +316,7 @@ export default function DashboardPage() {
                         inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
                         ${stream.status === "live" ? "bg-green-500/20 text-green-400" :
                                                     stream.status === "scheduled" ? "bg-yellow-500/20 text-yellow-400" :
-                                                        "bg-gray-500/20 text-gray-400"}
-                      `}>
+                                                        "bg-gray-500/20 text-gray-400"}`}>
                                                 {stream.status === "live" && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>}
                                                 {stream.status === "live" ? "Live" : stream.status === "scheduled" ? "Terjadwal" : "Berhenti"}
                                             </span>

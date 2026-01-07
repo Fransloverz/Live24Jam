@@ -90,7 +90,9 @@ export default function UploadPage() {
 
     const hasVideoSelected = file !== null || driveFile !== null || (uploadSource === "url" && videoUrl.trim() !== "");
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!hasVideoSelected) {
             alert("Pilih video terlebih dahulu!");
@@ -98,20 +100,63 @@ export default function UploadPage() {
         }
 
         setUploading(true);
-        // Simulate upload progress
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += Math.random() * 15;
-            if (progress >= 100) {
-                progress = 100;
-                clearInterval(interval);
-                setTimeout(() => {
-                    alert("Video berhasil diupload! Stream akan segera dimulai.");
-                    window.location.href = "/dashboard/streams";
-                }, 500);
+        setUploadProgress(0);
+
+        try {
+            if (uploadSource === "local" && file) {
+                // Real file upload with progress
+                const formDataUpload = new FormData();
+                formDataUpload.append("video", file);
+
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener("progress", (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        setUploadProgress(percentComplete);
+                    }
+                });
+
+                xhr.addEventListener("load", async () => {
+                    if (xhr.status === 200) {
+                        const result = JSON.parse(xhr.responseText);
+                        alert(`Video "${result.file.name}" berhasil diupload! (${result.file.sizeFormatted})`);
+                        window.location.href = "/dashboard/streams";
+                    } else {
+                        const error = JSON.parse(xhr.responseText);
+                        alert(`Upload gagal: ${error.error}`);
+                        setUploading(false);
+                    }
+                });
+
+                xhr.addEventListener("error", () => {
+                    alert("Upload gagal. Periksa koneksi internet Anda.");
+                    setUploading(false);
+                });
+
+                xhr.open("POST", `${API_URL}/api/videos/upload`);
+                xhr.send(formDataUpload);
+            } else {
+                // For Google Drive or URL - simulate for now
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            alert("Video berhasil dikonfigurasi! Stream akan segera dimulai.");
+                            window.location.href = "/dashboard/streams";
+                        }, 500);
+                    }
+                    setUploadProgress(progress);
+                }, 300);
             }
-            setUploadProgress(progress);
-        }, 300);
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("Terjadi kesalahan saat upload");
+            setUploading(false);
+        }
     };
 
     return (
@@ -133,8 +178,8 @@ export default function UploadPage() {
                             type="button"
                             onClick={() => setUploadSource("local")}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${uploadSource === "local"
-                                    ? "bg-indigo-500 text-white"
-                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                ? "bg-indigo-500 text-white"
+                                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
                                 }`}
                         >
                             <span>💻</span> Upload Lokal
@@ -143,8 +188,8 @@ export default function UploadPage() {
                             type="button"
                             onClick={() => setUploadSource("gdrive")}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${uploadSource === "gdrive"
-                                    ? "bg-indigo-500 text-white"
-                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                ? "bg-indigo-500 text-white"
+                                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
                                 }`}
                         >
                             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -156,8 +201,8 @@ export default function UploadPage() {
                             type="button"
                             onClick={() => setUploadSource("url")}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${uploadSource === "url"
-                                    ? "bg-indigo-500 text-white"
-                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                ? "bg-indigo-500 text-white"
+                                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
                                 }`}
                         >
                             <span>🔗</span> URL Video
@@ -399,8 +444,12 @@ export default function UploadPage() {
                                     onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
                                     className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
                                 >
-                                    <option value="youtube">YouTube</option>
-                                    <option value="facebook">Facebook</option>
+                                    <option value="youtube">🔴 YouTube</option>
+                                    <option value="facebook">🔵 Facebook</option>
+                                    <option value="tiktok">🎵 TikTok</option>
+                                    <option value="twitch">💜 Twitch</option>
+                                    <option value="instagram">📷 Instagram</option>
+                                    <option value="custom">⚙️ Custom RTMP</option>
                                 </select>
                             </div>
 

@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "$2b$10$ni6CoSEP7s2QKytPgTWuFOZmahpoWP7O66CIFWHWaKwEYkQiuOjW2",
+    "email": "admin@live24jam.com",
+    "role": "admin",
+    "createdAt": "2026-01-07T00:13:17.726Z"
+  }
+]
