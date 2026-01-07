@@ -3,6 +3,23 @@
 Platform live streaming otomatis untuk YouTube, Facebook, TikTok, Twitch, dan platform RTMP lainnya.
 
 ![Live24Jam Dashboard](https://img.shields.io/badge/Live24Jam-Streaming%20Platform-red)
+![Node.js](https://img.shields.io/badge/Node.js-18+-green)
+![Next.js](https://img.shields.io/badge/Next.js-15-black)
+![License](https://img.shields.io/badge/License-MIT-blue)
+
+## 📸 Screenshots
+
+### Dashboard dengan VPS Monitoring
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Login Page
+![Login](docs/screenshots/login.png)
+
+### Multi-Platform Streaming (YouTube, TikTok, Twitch, dll)
+![Add Stream](docs/screenshots/add-stream.png)
+
+### Upload Video dengan Drag & Drop
+![Upload](docs/screenshots/upload.png)
 
 ## ✨ Fitur Utama
 
