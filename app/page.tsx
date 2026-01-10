@@ -1,49 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
-
-// Animated counter component
-function AnimatedCounter({ end, duration = 2000, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
-  const [count, setCount] = useState(end); // Start with end value for SSR
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-    setCount(0); // Reset to 0 then animate
-
-    let startTime: number;
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      setCount(Math.floor(progress * end));
-      if (progress < 1) requestAnimationFrame(animate);
-    };
-    requestAnimationFrame(animate);
-  }, [end, duration]);
-
-  // On server and initial render, show end value to match SSR
-  if (!isMounted) {
-    return <span suppressHydrationWarning>{end.toLocaleString()}{suffix}</span>;
-  }
-
-  return <span>{count.toLocaleString()}{suffix}</span>;
-}
 
 // Navigation Component
 function Navbar() {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? "bg-gray-900/95 backdrop-blur-md shadow-lg" : "bg-transparent"
-      }`}>
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-md border-b border-gray-800">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <a href="#" className="flex items-center gap-2">
@@ -53,345 +16,93 @@ function Navbar() {
             <span className="text-xl font-bold text-white">Live24Jam</span>
           </a>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#cara-kerja" className="text-gray-300 hover:text-white transition-colors">Cara Kerja</a>
-            <a href="#keunggulan" className="text-gray-300 hover:text-white transition-colors">Keunggulan</a>
-            <a href="#paket" className="text-gray-300 hover:text-white transition-colors">Paket</a>
-            <a href="#faq" className="text-gray-300 hover:text-white transition-colors">FAQ</a>
-            <Link href="/login" className="text-gray-300 hover:text-white transition-colors">Masuk</Link>
-            <Link href="/dashboard" className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-5 py-2 rounded-full font-medium hover:shadow-lg hover:shadow-orange-500/30 transition-all">
-              Coba Gratis
+          <div className="flex items-center gap-4">
+            <a href="#paket" className="hidden sm:block text-gray-300 hover:text-white transition-colors">Paket</a>
+            <a
+              href="https://wa.me/6288238880227?text=Halo,%20saya%20mau%20order%20jasa%20live%20streaming"
+              target="_blank"
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full font-medium flex items-center gap-2 transition-all"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+              <span className="hidden sm:inline">WhatsApp</span>
+            </a>
+            <Link href="/login" className="text-gray-400 hover:text-white transition-colors text-sm">
+              Login
             </Link>
           </div>
-
-          {/* Mobile Menu Button */}
-          <button className="md:hidden text-white" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {isMenuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
         </div>
-
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden mt-4 pb-4 flex flex-col gap-4 animate-fade-in-up">
-            <a href="#cara-kerja" className="text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Cara Kerja</a>
-            <a href="#keunggulan" className="text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Keunggulan</a>
-            <a href="#paket" className="text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>Paket</a>
-            <a href="#faq" className="text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>FAQ</a>
-            <Link href="/login" className="text-gray-300 hover:text-white">Masuk</Link>
-            <Link href="/dashboard" className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-5 py-2 rounded-full font-medium text-center">
-              Coba Gratis
-            </Link>
-          </div>
-        )}
       </div>
     </nav>
   );
 }
 
-// Hero Section - Completely new design
+// Hero Section
 function Hero() {
   return (
-    <section className="min-h-screen relative overflow-hidden flex items-center">
-      {/* Animated Background */}
+    <section className="min-h-screen relative overflow-hidden flex items-center pt-20">
+      {/* Background */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-900 to-black"></div>
-        <div className="absolute top-0 left-0 w-full h-full">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-orange-500/20 rounded-full filter blur-[100px] animate-pulse"></div>
-          <div className="absolute bottom-20 right-10 w-96 h-96 bg-red-600/20 rounded-full filter blur-[120px] animate-pulse" style={{ animationDelay: "1s" }}></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-orange-600/10 rounded-full filter blur-[150px]"></div>
-        </div>
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 opacity-10" style={{
-          backgroundImage: "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-          backgroundSize: "50px 50px"
-        }}></div>
+        <div className="absolute top-20 left-10 w-72 h-72 bg-orange-500/20 rounded-full filter blur-[100px] animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-red-600/20 rounded-full filter blur-[120px] animate-pulse"></div>
       </div>
 
-      <div className="container relative z-10 pt-32 pb-20">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Left Content */}
-          <div className="animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/30 rounded-full px-4 py-2 mb-6">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-orange-400 text-sm font-medium">1,234 channel sedang live sekarang</span>
-            </div>
-
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6">
-              Streaming{" "}
-              <span className="bg-gradient-to-r from-orange-400 via-red-500 to-pink-500 bg-clip-text text-transparent">
-                24 Jam Nonstop
-              </span>
-              <br />
-              Tanpa Komputer Menyala
-            </h1>
-
-            <p className="text-lg text-gray-400 mb-8 max-w-lg">
-              Lupakan overheat, listrik mahal, dan internet putus.
-              <span className="text-white font-medium"> Live24Jam</span> menangani semuanya dari cloud.
-              Kamu cukup upload video sekali, streaming jalan terus 24/7.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 mb-12">
-              <Link href="/dashboard" className="group bg-gradient-to-r from-orange-500 to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg flex items-center justify-center gap-2 hover:shadow-xl hover:shadow-orange-500/30 transition-all hover:-translate-y-1">
-                Mulai Gratis 7 Hari
-                <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </Link>
-              <a href="#cara-kerja" className="border border-gray-700 text-white px-8 py-4 rounded-full font-semibold text-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-all">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Lihat Demo
-              </a>
-            </div>
-
-            {/* Trust Badges */}
-            <div className="flex items-center gap-6 text-gray-500 text-sm">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Tanpa Kartu Kredit</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Setup 5 Menit</span>
-              </div>
-            </div>
+      <div className="container relative z-10 py-16">
+        <div className="max-w-4xl mx-auto text-center">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-full px-4 py-2 mb-6">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span className="text-green-400 text-sm font-medium">Jasa Live Streaming Terpercaya</span>
           </div>
 
-          {/* Right - Dashboard Preview */}
-          <div className="relative hidden lg:block">
-            <div className="relative">
-              {/* Glow effect */}
-              <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/30 to-red-500/30 rounded-3xl filter blur-3xl opacity-50"></div>
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold leading-tight mb-6">
+            Live Streaming{" "}
+            <span className="text-orange-500">
+              16 Jam
+            </span>
+            <br />
+            <span className="text-3xl md:text-5xl text-yellow-400">Cuma Rp 10.000!</span>
+          </h1>
 
-              {/* Dashboard mockup */}
-              <div className="relative bg-gray-900 rounded-2xl border border-gray-800 p-4 shadow-2xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <span className="ml-2 text-gray-500 text-xs">live24jam.com/dashboard</span>
-                </div>
+          <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
+            Tinggal kirim video dan stream key, kami yang streamingkan 24 jam nonstop.
+            <span className="text-white font-medium"> Tanpa ribet, tanpa komputer menyala!</span>
+          </p>
 
-                <div className="space-y-3">
-                  {/* Stats row */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-gray-800 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-orange-400">5</div>
-                      <div className="text-xs text-gray-500">Live Aktif</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-green-400">847</div>
-                      <div className="text-xs text-gray-500">Viewers</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-blue-400">99.9%</div>
-                      <div className="text-xs text-gray-500">Uptime</div>
-                    </div>
-                  </div>
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <a
+              href="https://wa.me/6288238880227?text=Halo,%20saya%20mau%20order%20jasa%20live%20streaming%2024%20jam"
+              target="_blank"
+              className="group bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-full font-semibold text-lg flex items-center justify-center gap-3 hover:shadow-xl hover:shadow-green-500/30 transition-all"
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+              Order via WhatsApp
+            </a>
+            <a href="#paket" className="border border-gray-700 text-white px-8 py-4 rounded-full font-semibold text-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-all">
+              Lihat Paket
+            </a>
+          </div>
 
-                  {/* Stream list */}
-                  {[
-                    { title: "Lo-Fi Study Beats", status: "live", viewers: 234 },
-                    { title: "Relaxing Piano", status: "live", viewers: 189 },
-                    { title: "Rain ASMR", status: "live", viewers: 156 },
-                  ].map((stream, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-gray-800/50 rounded-lg p-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
-                        🎵
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-white">{stream.title}</div>
-                        <div className="text-xs text-gray-500">YouTube • {stream.viewers} viewers</div>
-                      </div>
-                      <span className="flex items-center gap-1 text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
-                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                        LIVE
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Trust Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-gray-500 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✓</span>
+              <span>Proses Cepat</span>
             </div>
-
-            {/* Floating elements */}
-            <div className="absolute -top-6 -right-6 bg-gray-800 border border-gray-700 rounded-xl p-3 shadow-xl animate-float">
-              <div className="text-2xl mb-1">⚡</div>
-              <div className="text-xs text-gray-400">Auto-restart</div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✓</span>
+              <span>Bayar via Transfer</span>
             </div>
-            <div className="absolute -bottom-4 -left-6 bg-gray-800 border border-gray-700 rounded-xl p-3 shadow-xl animate-float" style={{ animationDelay: "0.5s" }}>
-              <div className="text-2xl mb-1">☁️</div>
-              <div className="text-xs text-gray-400">Cloud-based</div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-500">✓</span>
+              <span>Support 24 Jam</span>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// Stats Section
-function Stats() {
-  return (
-    <section className="py-16 border-y border-gray-800 bg-gray-900/50">
-      <div className="container">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {[
-            { value: 5000, suffix: "+", label: "Channel Aktif" },
-            { value: 99.9, suffix: "%", label: "Uptime Server" },
-            { value: 1000000, suffix: "+", label: "Jam Streaming" },
-            { value: 24, suffix: "/7", label: "Support" },
-          ].map((stat, i) => (
-            <div key={i} className="text-center">
-              <div className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
-                <AnimatedCounter end={stat.value} suffix={stat.suffix} />
-              </div>
-              <div className="text-gray-500 mt-1">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// How It Works Section
-function HowItWorks() {
-  const steps = [
-    {
-      step: "01",
-      icon: "📤",
-      title: "Upload Video Kamu",
-      desc: "Upload video dari komputer atau langsung dari Google Drive. Support MP4, MOV, hingga 5GB."
-    },
-    {
-      step: "02",
-      icon: "⚙️",
-      title: "Atur Streaming",
-      desc: "Masukkan stream key YouTube/Facebook, pilih kualitas, dan atur jadwal jika perlu."
-    },
-    {
-      step: "03",
-      icon: "🚀",
-      title: "Klik Start",
-      desc: "Satu klik, streaming langsung jalan 24/7 dari server cloud kami. Selesai!"
-    },
-  ];
-
-  return (
-    <section id="cara-kerja" className="py-24 relative">
-      <div className="container">
-        <div className="text-center mb-16">
-          <span className="text-orange-400 text-sm font-semibold uppercase tracking-wider">Cara Kerja</span>
-          <h2 className="text-3xl md:text-5xl font-bold mt-3 mb-4">
-            Semudah <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">1-2-3</span>
-          </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto">
-            Tidak perlu skill teknis. Dalam 5 menit, live streaming 24 jam kamu sudah berjalan.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-8">
-          {steps.map((step, i) => (
-            <div key={i} className="relative group">
-              {/* Connector line */}
-              {i < steps.length - 1 && (
-                <div className="hidden md:block absolute top-12 left-full w-full h-0.5 bg-gradient-to-r from-orange-500/50 to-transparent -translate-x-1/2 z-0"></div>
-              )}
-
-              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl p-8 hover:border-orange-500/50 transition-all group-hover:-translate-y-2 duration-300">
-                <div className="flex items-center gap-4 mb-6">
-                  <span className="text-5xl">{step.icon}</span>
-                  <span className="text-5xl font-bold text-gray-800 group-hover:text-orange-500/20 transition-colors">{step.step}</span>
-                </div>
-                <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
-                <p className="text-gray-400">{step.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// Features/Benefits Section
-function Features() {
-  const features = [
-    {
-      icon: "🖥️",
-      title: "Komputer Bebas Mati",
-      desc: "Streaming jalan terus di cloud. Komputer kamu bisa dimatikan kapan saja.",
-      color: "from-blue-500 to-cyan-500"
-    },
-    {
-      icon: "💡",
-      title: "Hemat Listrik",
-      desc: "Tidak perlu PC gaming menyala 24 jam. Hemat jutaan rupiah per bulan.",
-      color: "from-green-500 to-emerald-500"
-    },
-    {
-      icon: "🔄",
-      title: "Auto-Restart",
-      desc: "Streaming mati? Sistem otomatis restart dalam hitungan detik.",
-      color: "from-orange-500 to-red-500"
-    },
-    {
-      icon: "📱",
-      title: "Kontrol dari HP",
-      desc: "Kelola semua streaming langsung dari browser di HP atau tablet.",
-      color: "from-purple-500 to-pink-500"
-    },
-    {
-      icon: "📅",
-      title: "Jadwal Otomatis",
-      desc: "Set jadwal sekali, streaming jalan sesuai waktu yang ditentukan.",
-      color: "from-yellow-500 to-orange-500"
-    },
-    {
-      icon: "🔗",
-      title: "Multi Platform",
-      desc: "YouTube dan Facebook dalam satu dashboard. Streaming ke mana saja.",
-      color: "from-red-500 to-pink-500"
-    },
-  ];
-
-  return (
-    <section id="keunggulan" className="py-24 bg-gradient-to-b from-transparent via-gray-900/50 to-transparent">
-      <div className="container">
-        <div className="text-center mb-16">
-          <span className="text-orange-400 text-sm font-semibold uppercase tracking-wider">Keunggulan</span>
-          <h2 className="text-3xl md:text-5xl font-bold mt-3 mb-4">
-            Kenapa Pilih <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">Live24Jam</span>?
-          </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto">
-            Solusi lengkap untuk content creator yang ingin monetisasi konten 24/7 tanpa repot.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, i) => (
-            <div key={i} className="group bg-gray-900/50 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-all">
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.color} bg-opacity-20 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform`}>
-                {feature.icon}
-              </div>
-              <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-              <p className="text-gray-400">{feature.desc}</p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
@@ -402,103 +113,106 @@ function Features() {
 function Pricing() {
   const plans = [
     {
-      name: "Starter",
-      price: "149",
-      desc: "Untuk pemula yang baru mulai",
+      name: "1 x 16 Jam",
+      price: "10",
+      desc: "Live streaming 16 jam nonstop",
       features: [
-        "5 Live Stream aktif",
-        "720p HD Quality",
-        "YouTube Support",
-        "10GB Storage",
-        "Email Support",
-      ],
-      popular: false,
-    },
-    {
-      name: "Pro",
-      price: "299",
-      desc: "Untuk creator serius",
-      features: [
-        "15 Live Stream aktif",
-        "1080p Full HD",
-        "YouTube + Facebook",
-        "50GB Storage",
-        "Priority Support",
-        "Auto-Scheduling",
-        "Google Drive Import",
+        "1 Channel Streaming",
+        "HD Quality (720p/1080p)",
+        "YouTube / Facebook / TikTok",
+        "Auto-restart jika error",
+        "Video tersimpan di YouTube",
+        "Support WhatsApp",
       ],
       popular: true,
     },
     {
-      name: "Business",
-      price: "499",
-      desc: "Untuk agensi & bisnis",
+      name: "3 x 16 Jam",
+      price: "25",
+      desc: "Hemat untuk 3 hari streaming",
       features: [
-        "Unlimited Live Stream",
-        "4K Ultra HD",
-        "All Platforms",
-        "200GB Storage",
-        "24/7 WhatsApp Support",
-        "API Access",
-        "Custom Branding",
-        "Team Management",
+        "1 Channel Streaming",
+        "HD Quality (720p/1080p)",
+        "YouTube / Facebook / TikTok",
+        "Auto-restart jika error",
+        "Video tersimpan di YouTube",
+        "Support WhatsApp 24/7",
+        "Bonus: Setup gratis",
+      ],
+      popular: false,
+    },
+    {
+      name: "7 x 16 Jam",
+      price: "50",
+      desc: "Paket mingguan terbaik",
+      features: [
+        "1 Channel Streaming",
+        "Full HD Quality",
+        "Multi Platform",
+        "Auto-restart jika error",
+        "Video tersimpan di YouTube",
+        "Priority WhatsApp Support",
+        "Setup gratis",
+        "Monitoring harian",
       ],
       popular: false,
     },
   ];
 
   return (
-    <section id="paket" className="py-24">
+    <section id="paket" className="py-20 bg-gray-900/50">
       <div className="container">
-        <div className="text-center mb-16">
-          <span className="text-orange-400 text-sm font-semibold uppercase tracking-wider">Harga</span>
+        <div className="text-center mb-12">
+          <span className="text-orange-400 text-sm font-semibold uppercase tracking-wider">Harga Terjangkau</span>
           <h2 className="text-3xl md:text-5xl font-bold mt-3 mb-4">
-            Pilih Paket <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">Sesuai Kebutuhan</span>
+            Pilih <span className="text-orange-500">Paket</span> Kamu
           </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto">
-            Mulai gratis 7 hari. Tidak perlu kartu kredit. Upgrade kapan saja.
+          <p className="text-gray-400 max-w-xl mx-auto">
+            Tinggal kirim video dan stream key, kami yang handle semuanya!
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {plans.map((plan, i) => (
-            <div key={i} className={`relative rounded-2xl p-8 ${plan.popular
-              ? "bg-gradient-to-b from-orange-500/10 to-red-500/10 border-2 border-orange-500/50"
-              : "bg-gray-900 border border-gray-800"
+            <div key={i} className={`relative rounded-2xl p-6 ${plan.popular
+              ? "bg-gradient-to-b from-orange-500/10 to-red-500/10 border-2 border-orange-500/50 scale-105"
+              : "bg-gray-800/50 border border-gray-700"
               }`}>
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-semibold px-4 py-1 rounded-full">
-                  Paling Populer
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-4 py-1 rounded-full">
+                  PALING LARIS
                 </div>
               )}
 
               <div className="text-center mb-6">
-                <h3 className="text-xl font-semibold mb-1">{plan.name}</h3>
+                <h3 className="text-xl font-bold mb-1">{plan.name}</h3>
                 <p className="text-gray-500 text-sm mb-4">{plan.desc}</p>
                 <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-gray-500 text-lg">Rp</span>
-                  <span className="text-5xl font-bold">{plan.price}</span>
-                  <span className="text-gray-500">k/bln</span>
+                  <span className="text-gray-500">Rp</span>
+                  <span className="text-5xl font-bold text-orange-500">{plan.price}</span>
+                  <span className="text-gray-500">rb</span>
                 </div>
               </div>
 
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-3 mb-6">
                 {plan.features.map((feature, fi) => (
-                  <li key={fi} className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                  <li key={fi} className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
                     <span className="text-gray-300">{feature}</span>
                   </li>
                 ))}
               </ul>
 
-              <Link href="/dashboard" className={`block text-center py-3 rounded-full font-semibold transition-all ${plan.popular
-                ? "bg-gradient-to-r from-orange-500 to-red-600 text-white hover:shadow-lg hover:shadow-orange-500/30"
-                : "bg-gray-800 text-white hover:bg-gray-700"
-                }`}>
-                Mulai Sekarang
-              </Link>
+              <a
+                href={`https://wa.me/6288238880227?text=Halo,%20saya%20mau%20order%20paket%20${encodeURIComponent(plan.name)}`}
+                target="_blank"
+                className={`block text-center py-3 rounded-full font-semibold transition-all ${plan.popular
+                  ? "bg-green-500 hover:bg-green-600 text-white"
+                  : "bg-gray-700 hover:bg-gray-600 text-white"
+                  }`}
+              >
+                💬 Order WhatsApp
+              </a>
             </div>
           ))}
         </div>
@@ -507,60 +221,29 @@ function Pricing() {
   );
 }
 
-// FAQ Section
-function FAQ() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-  const faqs = [
-    {
-      q: "Apa itu Live24Jam?",
-      a: "Live24Jam adalah platform streaming 24/7 berbasis cloud. Kamu cukup upload video sekali, dan streaming akan berjalan terus menerus dari server kami tanpa perlu komputer atau HP menyala."
-    },
-    {
-      q: "Apakah bisa streaming ke YouTube dan Facebook?",
-      a: "Ya! Live24Jam mendukung streaming ke YouTube dan Facebook. Kamu bisa mengatur kedua platform dari satu dashboard yang sama."
-    },
-    {
-      q: "Bagaimana cara upload video dari Google Drive?",
-      a: "Cukup hubungkan akun Google Drive kamu, lalu pilih video yang ingin di-streaming. Tidak perlu download ulang ke komputer."
-    },
-    {
-      q: "Apakah streaming akan mati jika internet saya putus?",
-      a: "Tidak! Karena streaming berjalan di server cloud kami, kondisi internet kamu tidak berpengaruh. Streaming tetap jalan 24/7."
-    },
-    {
-      q: "Bisa dibatalkan kapan saja?",
-      a: "Tentu! Tidak ada kontrak jangka panjang. Kamu bisa upgrade, downgrade, atau berhenti kapan saja sesuai kebutuhan."
-    },
+// How to Order Section
+function HowToOrder() {
+  const steps = [
+    { icon: "1️⃣", title: "Hubungi WhatsApp", desc: "Chat kami di 088238880227" },
+    { icon: "2️⃣", title: "Kirim Video & Stream Key", desc: "Upload video via Google Drive" },
+    { icon: "3️⃣", title: "Transfer Pembayaran", desc: "Bayar sesuai paket yang dipilih" },
+    { icon: "4️⃣", title: "Streaming Jalan!", desc: "Kami proses, streaming langsung live" },
   ];
 
   return (
-    <section id="faq" className="py-24 bg-gradient-to-b from-transparent via-gray-900/50 to-transparent">
-      <div className="container max-w-3xl">
-        <div className="text-center mb-16">
-          <span className="text-orange-400 text-sm font-semibold uppercase tracking-wider">FAQ</span>
-          <h2 className="text-3xl md:text-5xl font-bold mt-3 mb-4">
-            Pertanyaan <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">Umum</span>
-          </h2>
+    <section className="py-20">
+      <div className="container">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Cara Order</h2>
+          <p className="text-gray-400">Prosesnya cepat dan mudah!</p>
         </div>
 
-        <div className="space-y-4">
-          {faqs.map((faq, i) => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <button
-                onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                className="w-full flex items-center justify-between p-5 text-left"
-              >
-                <span className="font-semibold pr-4">{faq.q}</span>
-                <svg className={`w-5 h-5 text-orange-500 flex-shrink-0 transition-transform ${openIndex === i ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {openIndex === i && (
-                <div className="px-5 pb-5 text-gray-400 animate-fade-in-up">
-                  {faq.a}
-                </div>
-              )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+          {steps.map((step, i) => (
+            <div key={i} className="text-center">
+              <div className="text-4xl mb-3">{step.icon}</div>
+              <h3 className="font-semibold mb-1">{step.title}</h3>
+              <p className="text-gray-500 text-sm">{step.desc}</p>
             </div>
           ))}
         </div>
@@ -569,31 +252,27 @@ function FAQ() {
   );
 }
 
-// CTA Section
-function CTA() {
+// Contact Banner
+function ContactBanner() {
   return (
-    <section className="py-24">
+    <section className="py-16">
       <div className="container">
-        <div className="relative bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-3xl p-12 text-center overflow-hidden">
-          {/* Background glow */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-96 h-96 bg-orange-500/20 rounded-full filter blur-[100px]"></div>
-          </div>
-
-          <div className="relative z-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Siap Streaming 24 Jam Nonstop?
-            </h2>
-            <p className="text-gray-400 mb-8 max-w-xl mx-auto">
-              Gabung dengan ribuan content creator yang sudah menghasilkan uang tidur dengan Live24Jam.
-            </p>
-            <Link href="/dashboard" className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-600 text-white px-8 py-4 rounded-full font-semibold text-lg hover:shadow-xl hover:shadow-orange-500/30 transition-all">
-              Mulai Gratis Sekarang
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </Link>
-          </div>
+        <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-3xl p-8 md:p-12 text-center">
+          <span className="text-5xl block mb-4">📱</span>
+          <h2 className="text-2xl md:text-4xl font-bold mb-4">Hubungi Kami Sekarang!</h2>
+          <p className="text-gray-400 mb-8 max-w-xl mx-auto">
+            Respon cepat, proses mudah. Streaming Anda langsung jalan dalam hitungan menit!
+          </p>
+          <a
+            href="https://wa.me/6288238880227?text=Halo,%20saya%20mau%20order%20jasa%20live%20streaming"
+            target="_blank"
+            className="inline-flex items-center gap-3 bg-green-500 hover:bg-green-600 text-white px-10 py-5 rounded-full font-bold text-xl transition-all hover:shadow-xl hover:shadow-green-500/30"
+          >
+            <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+            </svg>
+            088238880227
+          </a>
         </div>
       </div>
     </section>
@@ -603,52 +282,28 @@ function CTA() {
 // Footer
 function Footer() {
   return (
-    <footer className="border-t border-gray-800 py-12">
+    <footer className="border-t border-gray-800 py-8">
       <div className="container">
-        <div className="grid md:grid-cols-4 gap-8 mb-8">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
-                <span className="text-white font-bold text-lg">24</span>
-              </div>
-              <span className="text-xl font-bold text-white">Live24Jam</span>
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
+              <span className="text-white font-bold text-sm">24</span>
             </div>
-            <p className="text-gray-500 text-sm">
-              Platform streaming 24/7 berbasis cloud. Upload sekali, live terus tanpa ribet.
-            </p>
+            <span className="font-bold text-white">Live24Jam</span>
           </div>
 
-          <div>
-            <h4 className="font-semibold mb-4">Produk</h4>
-            <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="#cara-kerja" className="hover:text-white transition-colors">Cara Kerja</a></li>
-              <li><a href="#keunggulan" className="hover:text-white transition-colors">Keunggulan</a></li>
-              <li><a href="#paket" className="hover:text-white transition-colors">Harga</a></li>
-              <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
-            </ul>
+          <div className="flex items-center gap-6 text-sm text-gray-500">
+            <a href="https://wa.me/6288238880227" className="hover:text-white transition-colors">
+              📱 088238880227
+            </a>
+            <Link href="/login" className="hover:text-white transition-colors">
+              Login Admin
+            </Link>
           </div>
 
-          <div>
-            <h4 className="font-semibold mb-4">Support</h4>
-            <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="mailto:support@live24jam.com" className="hover:text-white transition-colors">📧 Email</a></li>
-              <li><a href="https://wa.me/6281234567890" className="hover:text-white transition-colors">💬 WhatsApp</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">📖 Panduan</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4">Legal</h4>
-            <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
-              <li><a href="/terms" className="hover:text-white transition-colors">Terms of Service</a></li>
-              <li><a href="/refund" className="hover:text-white transition-colors">Refund Policy</a></li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-800 pt-8 text-center text-gray-500 text-sm">
-          © 2025 Live24Jam. All rights reserved.
+          <p className="text-gray-600 text-sm">
+            © 2025 Live24Jam
+          </p>
         </div>
       </div>
     </footer>
@@ -662,12 +317,9 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
-        <Stats />
-        <HowItWorks />
-        <Features />
         <Pricing />
-        <FAQ />
-        <CTA />
+        <HowToOrder />
+        <ContactBanner />
       </main>
       <Footer />
     </>

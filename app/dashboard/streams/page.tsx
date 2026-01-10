@@ -57,6 +57,9 @@ interface Stream {
     viewers: number;
     isRunning?: boolean;
     createdAt?: string;
+    startedAt?: string;
+    estimatedEndAt?: string;
+    durationHours?: number;
 }
 
 interface VideoFile {
@@ -76,13 +79,15 @@ export default function StreamsPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [isCustomDuration, setIsCustomDuration] = useState(false);
     const [newStream, setNewStream] = useState({
         title: "",
         platform: "youtube",
         rtmpUrl: PLATFORM_PRESETS.youtube.rtmpUrl,
         streamKey: "",
         videoFile: "",
-        quality: "1080p"
+        quality: "1080p",
+        durationHours: 0 // 0 = unlimited (24/7)
     });
 
     // Handle platform change - auto-fill RTMP URL
@@ -207,14 +212,70 @@ export default function StreamsPage() {
                     rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
                     streamKey: "",
                     videoFile: "",
-                    quality: "1080p"
+                    quality: "1080p",
+                    durationHours: 0
                 });
+                setIsCustomDuration(false);
             } else {
                 const error = await response.json();
                 alert(error.error || "Gagal menambah stream");
             }
         } catch (error) {
             console.error("Error adding stream:", error);
+            alert("Gagal menghubungi server");
+        }
+    };
+
+    // Add stream and immediately start streaming
+    const addAndStartStream = async () => {
+        if (!newStream.title || !newStream.streamKey || !newStream.videoFile) {
+            alert("Lengkapi semua field terlebih dahulu!");
+            return;
+        }
+
+        try {
+            // First, create the stream
+            const createResponse = await fetch(`${API_URL}/api/streams`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newStream)
+            });
+
+            if (!createResponse.ok) {
+                const error = await createResponse.json();
+                alert(error.error || "Gagal menambah stream");
+                return;
+            }
+
+            const createdStream = await createResponse.json();
+
+            // Then immediately start the stream
+            const startResponse = await fetch(`${API_URL}/api/streams/${createdStream.id}/start`, {
+                method: "POST"
+            });
+
+            if (startResponse.ok) {
+                await fetchStreams();
+                setShowAddModal(false);
+                setNewStream({
+                    title: "",
+                    platform: "youtube",
+                    rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+                    streamKey: "",
+                    videoFile: "",
+                    quality: "1080p",
+                    durationHours: 0
+                });
+                setIsCustomDuration(false);
+                alert("🎉 Stream berhasil dibuat dan dimulai!");
+            } else {
+                const error = await startResponse.json();
+                alert(`Stream dibuat tapi gagal dimulai: ${error.error}`);
+                await fetchStreams();
+                setShowAddModal(false);
+            }
+        } catch (error) {
+            console.error("Error adding and starting stream:", error);
             alert("Gagal menghubungi server");
         }
     };
@@ -259,10 +320,11 @@ export default function StreamsPage() {
                         ].map((option) => (
                             <button
                                 key={option.value}
+                                type="button"
                                 onClick={() => setFilter(option.value)}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === option.value
-                                    ? "bg-indigo-500 text-white"
-                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border-2 ${filter === option.value
+                                    ? "bg-indigo-500 text-white border-indigo-400 shadow-lg shadow-indigo-500/30"
+                                    : "bg-gray-800 text-gray-400 border-transparent hover:bg-gray-700 hover:text-white"
                                     }`}
                             >
                                 {option.label}
@@ -314,9 +376,45 @@ export default function StreamsPage() {
                                 </span>
                                 <span>{stream.quality}</span>
                             </div>
-                            <p className="text-xs text-gray-500 mb-4 truncate" title={stream.videoFile}>
+                            <p className="text-xs text-gray-500 mb-2 truncate" title={stream.videoFile}>
                                 📁 {stream.videoFile}
                             </p>
+
+                            {/* Stream Timing Info - only show when running */}
+                            {stream.isRunning && stream.startedAt && (
+                                <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-xs space-y-1">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">🟢 Mulai:</span>
+                                        <span className="text-green-400 font-mono">
+                                            {new Date(stream.startedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    {stream.estimatedEndAt ? (
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500">🔴 Selesai:</span>
+                                            <span className="text-red-400 font-mono">
+                                                {new Date(stream.estimatedEndAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                {' '}
+                                                <span className="text-gray-600">
+                                                    ({new Date(stream.estimatedEndAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })})
+                                                </span>
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500">⏱️ Durasi:</span>
+                                            <span className="text-indigo-400">♾️ Unlimited</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Duration info when not running */}
+                            {!stream.isRunning && stream.durationHours !== undefined && (
+                                <p className="text-xs text-gray-500 mb-3">
+                                    ⏱️ Durasi: {stream.durationHours === 0 ? '♾️ Unlimited' : `${stream.durationHours} jam`}
+                                </p>
+                            )}
 
                             {/* Actions */}
                             <div className="flex gap-2">
@@ -456,9 +554,12 @@ export default function StreamsPage() {
                                 ) : (
                                     <div className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-center">
                                         <p className="text-gray-400 text-sm">⚠️ Tidak ada video ditemukan</p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Upload video ke folder <code className="bg-gray-700 px-1 rounded">videos/</code>
-                                        </p>
+                                        <Link
+                                            href="/dashboard/upload"
+                                            className="text-sm text-indigo-400 hover:text-indigo-300 underline mt-2 inline-block"
+                                        >
+                                            📤 Upload Video Sekarang
+                                        </Link>
                                     </div>
                                 )}
                                 {newStream.videoFile && (
@@ -481,20 +582,84 @@ export default function StreamsPage() {
                                 </select>
                             </div>
 
-                            <div className="flex gap-3 pt-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Durasi Streaming</label>
+                                <div className="flex gap-2 items-center">
+                                    <select
+                                        value={isCustomDuration ? "custom" : newStream.durationHours}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "custom") {
+                                                setIsCustomDuration(true);
+                                                setNewStream({ ...newStream, durationHours: 5 }); // Default custom value
+                                            } else {
+                                                setIsCustomDuration(false);
+                                                setNewStream({ ...newStream, durationHours: Number(val) });
+                                            }
+                                        }}
+                                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                    >
+                                        <option value={0}>♾️ Unlimited (24/7)</option>
+                                        <option value={1}>1 Jam</option>
+                                        <option value={2}>2 Jam</option>
+                                        <option value={3}>3 Jam</option>
+                                        <option value={4}>4 Jam</option>
+                                        <option value={6}>6 Jam</option>
+                                        <option value={8}>8 Jam</option>
+                                        <option value={10}>10 Jam</option>
+                                        <option value={12}>12 Jam</option>
+                                        <option value={24}>24 Jam</option>
+                                        <option value={48}>48 Jam</option>
+                                        <option value={72}>72 Jam (3 Hari)</option>
+                                        <option value="custom">✏️ Custom...</option>
+                                    </select>
+                                    {isCustomDuration && (
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="720"
+                                                value={newStream.durationHours}
+                                                onChange={(e) => setNewStream({ ...newStream, durationHours: Math.max(1, Number(e.target.value)) })}
+                                                className="w-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white text-center"
+                                                autoFocus
+                                            />
+                                            <span className="text-gray-400 text-sm">jam</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    ⏱️ Stream akan otomatis berhenti setelah waktu yang ditentukan
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col gap-3 pt-4">
+                                {/* Primary action - Start Streaming */}
                                 <button
                                     type="button"
-                                    onClick={() => setShowAddModal(false)}
-                                    className="flex-1 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
+                                    onClick={addAndStartStream}
+                                    disabled={!newStream.title || !newStream.streamKey || !newStream.videoFile}
+                                    className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/30"
                                 >
-                                    Batal
+                                    🔴 Mulai Live Streaming
                                 </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium"
-                                >
-                                    Simpan Stream
-                                </button>
+
+                                {/* Secondary actions */}
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAddModal(false)}
+                                        className="flex-1 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 py-2 bg-indigo-500/50 text-white rounded-lg hover:bg-indigo-500 transition-colors font-medium"
+                                    >
+                                        💾 Simpan Saja
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>

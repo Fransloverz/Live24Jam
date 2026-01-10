@@ -7,12 +7,13 @@ const runningStreams = new Map();
 const streamLogs = new Map();
 const streamConfigs = new Map(); // Store stream configs for auto-restart
 
-// Auto-restart configuration
+// Auto-restart configuration - ENHANCED for 24/7 streaming
 const AUTO_RESTART_CONFIG = {
     enabled: true,
-    maxRetries: 5,           // Maximum restart attempts
-    retryDelay: 5000,        // Delay between restarts (5 seconds)
-    resetRetryAfter: 300000  // Reset retry count after 5 minutes of stable streaming
+    maxRetries: 999999,          // Practically unlimited restart attempts
+    retryDelay: 3000,            // Faster retry (3 seconds)
+    resetRetryAfter: 180000,     // Reset retry count after 3 minutes of stable streaming
+    healthCheckInterval: 30000   // Health check every 30 seconds
 };
 
 // Video directory
@@ -284,11 +285,74 @@ function formatStreamUptime(seconds) {
     return `${secs}s`;
 }
 
+/**
+ * Health check - monitors all streams and restarts if needed
+ */
+function startHealthCheck() {
+    console.log('🏥 Starting stream health check service...');
+
+    setInterval(() => {
+        const configs = Array.from(streamConfigs.entries());
+
+        for (const [id, config] of configs) {
+            // Skip if auto-restart is disabled (manually stopped)
+            if (!config.autoRestart) continue;
+
+            // Check if stream should be running but isn't
+            if (!runningStreams.has(id) && config.autoRestart) {
+                console.log(`🔍 Health check: Stream ${id} not running, attempting restart...`);
+                addLog(id, 'Health check triggered restart');
+
+                startStream(config.stream, config.forceReencode)
+                    .then(() => {
+                        console.log(`✅ Health check: Stream ${id} restarted`);
+                        addLog(id, 'Health check restart successful');
+                    })
+                    .catch((err) => {
+                        console.error(`❌ Health check: Failed to restart stream ${id}:`, err.message);
+                        addLog(id, `Health check restart failed: ${err.message}`);
+                    });
+            }
+        }
+    }, AUTO_RESTART_CONFIG.healthCheckInterval);
+
+    console.log(`🏥 Health check running every ${AUTO_RESTART_CONFIG.healthCheckInterval / 1000}s`);
+}
+
+/**
+ * Enable auto-restart for a stream (useful after manual restart)
+ */
+function enableAutoRestart(streamId) {
+    const config = streamConfigs.get(streamId);
+    if (config) {
+        config.autoRestart = true;
+        config.retryCount = 0;
+        console.log(`Auto-restart enabled for stream ${streamId}`);
+    }
+}
+
+/**
+ * Get stream stability stats
+ */
+function getStabilityStats() {
+    return {
+        config: AUTO_RESTART_CONFIG,
+        activeStreams: runningStreams.size,
+        trackedConfigs: streamConfigs.size,
+        healthCheckActive: true
+    };
+}
+
+// Start health check on module load
+startHealthCheck();
+
 module.exports = {
     startStream,
     stopStream,
     isStreamRunning,
     getStreamLogs,
     getRunningStreamIds,
-    getStreamInfo
+    getStreamInfo,
+    enableAutoRestart,
+    getStabilityStats
 };

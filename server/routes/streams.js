@@ -49,7 +49,7 @@ router.get('/:id', (req, res) => {
 
 // POST /api/streams - Create new stream
 router.post('/', (req, res) => {
-    const { title, platform, rtmpUrl, streamKey, videoFile, quality } = req.body;
+    const { title, platform, rtmpUrl, streamKey, videoFile, quality, durationHours } = req.body;
 
     if (!title || !rtmpUrl || !streamKey || !videoFile) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -64,6 +64,7 @@ router.post('/', (req, res) => {
         streamKey,
         videoFile,
         quality: quality || '1080p',
+        durationHours: durationHours || 0, // 0 = unlimited
         status: 'stopped',
         viewers: 0,
         createdAt: new Date().toISOString()
@@ -113,6 +114,9 @@ router.delete('/:id', (req, res) => {
     res.json({ message: 'Stream deleted' });
 });
 
+// Store active duration timers
+const durationTimers = new Map();
+
 // POST /api/streams/:id/start - Start streaming
 router.post('/:id/start', async (req, res) => {
     const streams = getStreams();
@@ -129,13 +133,59 @@ router.post('/:id/start', async (req, res) => {
     try {
         await ffmpegService.startStream(stream);
 
-        // Update status in file
+        // Calculate start time and estimated end time
+        const startedAt = new Date().toISOString();
+        let estimatedEndAt = null;
+
+        if (stream.durationHours && stream.durationHours > 0) {
+            const endTime = new Date();
+            endTime.setHours(endTime.getHours() + stream.durationHours);
+            estimatedEndAt = endTime.toISOString();
+        }
+
+        // Update status in file with timing info
         const updatedStreams = streams.map(s =>
-            s.id === stream.id ? { ...s, status: 'live' } : s
+            s.id === stream.id ? {
+                ...s,
+                status: 'live',
+                startedAt: startedAt,
+                estimatedEndAt: estimatedEndAt
+            } : s
         );
         saveStreams(updatedStreams);
 
-        res.json({ message: 'Stream started', streamId: stream.id });
+        // Set auto-stop timer if duration is specified
+        if (stream.durationHours && stream.durationHours > 0) {
+            const durationMs = stream.durationHours * 60 * 60 * 1000; // Convert hours to ms
+            console.log(`⏱️ Stream ${stream.id} will auto-stop after ${stream.durationHours} hours`);
+
+            // Clear existing timer if any
+            if (durationTimers.has(stream.id)) {
+                clearTimeout(durationTimers.get(stream.id));
+            }
+
+            // Set new timer
+            const timer = setTimeout(() => {
+                console.log(`⏰ Auto-stopping stream ${stream.id} after ${stream.durationHours} hours`);
+                ffmpegService.stopStream(stream.id);
+
+                // Update status in file
+                const currentStreams = getStreams();
+                const finalStreams = currentStreams.map(s =>
+                    s.id === stream.id ? { ...s, status: 'stopped' } : s
+                );
+                saveStreams(finalStreams);
+                durationTimers.delete(stream.id);
+            }, durationMs);
+
+            durationTimers.set(stream.id, timer);
+        }
+
+        res.json({
+            message: 'Stream started',
+            streamId: stream.id,
+            durationHours: stream.durationHours || 'unlimited'
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -156,6 +206,12 @@ router.post('/:id/stop', (req, res) => {
     }
 
     ffmpegService.stopStream(streamId);
+
+    // Clear duration timer if exists
+    if (durationTimers.has(streamId)) {
+        clearTimeout(durationTimers.get(streamId));
+        durationTimers.delete(streamId);
+    }
 
     // Update status in file
     const updatedStreams = streams.map(s =>

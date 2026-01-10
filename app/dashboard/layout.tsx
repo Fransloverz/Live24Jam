@@ -17,6 +17,7 @@ const menuItems = [
     { name: "Dashboard", icon: "📊", href: "/dashboard" },
     { name: "Live Streams", icon: "📺", href: "/dashboard/streams" },
     { name: "Upload Video", icon: "📤", href: "/dashboard/upload" },
+    { name: "Video Library", icon: "📁", href: "/dashboard/videos" },
     { name: "Stream Logs", icon: "📋", href: "/dashboard/logs" },
     { name: "Jadwal", icon: "📅", href: "/dashboard/schedule" },
     { name: "Pengaturan", icon: "⚙️", href: "/dashboard/settings" },
@@ -111,6 +112,33 @@ function Sidebar({ isOpen, onClose, user, onLogout }: {
 }
 
 function Header({ onMenuClick, user }: { onMenuClick: () => void; user: User | null }) {
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Update clock every second
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    };
+
+    const formatDate = (date: Date) => {
+        return date.toLocaleDateString('id-ID', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short'
+        });
+    };
+
     return (
         <header className="h-16 border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-30">
             <div className="h-full px-4 flex items-center justify-between">
@@ -123,6 +151,19 @@ function Header({ onMenuClick, user }: { onMenuClick: () => void; user: User | n
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </button>
+
+                {/* Real-time Clock */}
+                <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-lg px-3 py-1.5">
+                    <span className="text-lg">🕐</span>
+                    <div className="text-center">
+                        <div className="text-lg font-bold font-mono text-indigo-400 leading-tight">
+                            {formatTime(currentTime)}
+                        </div>
+                        <div className="text-[10px] text-gray-400 leading-tight">
+                            {formatDate(currentTime)}
+                        </div>
+                    </div>
+                </div>
 
                 {/* Search */}
                 <div className="hidden md:flex flex-1 max-w-md mx-4">
@@ -151,7 +192,7 @@ function Header({ onMenuClick, user }: { onMenuClick: () => void; user: User | n
                         </svg>
                         <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                     </button>
-                    <Link href="/dashboard/upload" className="btn-primary text-sm py-2 px-4 hidden sm:block">
+                    <Link href="/dashboard/streams" className="btn-primary text-sm py-2 px-4 hidden sm:block">
                         + New Stream
                     </Link>
                 </div>

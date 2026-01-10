@@ -5,28 +5,13 @@ import { useState, useEffect } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-// Mock data for demo
-const stats = [
-    { label: "Total Streams", value: "12", icon: "📺", change: "+2", positive: true },
-    { label: "Live Sekarang", value: "3", icon: "🔴", change: "0", positive: true },
-    { label: "Total Views", value: "45.2K", icon: "👁️", change: "+12%", positive: true },
-    { label: "Jam Live", value: "312h", icon: "⏱️", change: "+48h", positive: true },
-];
-
-const recentStreams = [
-    { id: 1, title: "Relaxing Piano Music 24/7", platform: "YouTube", status: "live", viewers: 127, duration: "24h 15m" },
-    { id: 2, title: "Rain Sounds for Sleep", platform: "YouTube", status: "live", viewers: 89, duration: "12h 30m" },
-    { id: 3, title: "Lo-Fi Study Beats", platform: "Facebook", status: "live", viewers: 45, duration: "8h 45m" },
-    { id: 4, title: "Nature Sounds", platform: "YouTube", status: "scheduled", viewers: 0, duration: "Starts in 2h" },
-    { id: 5, title: "ASMR Typing", platform: "YouTube", status: "stopped", viewers: 0, duration: "Ended 3h ago" },
-];
-
-const activityLog = [
-    { time: "2 menit lalu", action: "Stream dimulai", stream: "Relaxing Piano Music 24/7" },
-    { time: "1 jam lalu", action: "Video diupload", stream: "ocean-waves.mp4" },
-    { time: "3 jam lalu", action: "Stream dihentikan", stream: "Morning Jazz" },
-    { time: "5 jam lalu", action: "Jadwal dibuat", stream: "Night Ambience" },
-];
+interface StreamData {
+    id: number;
+    title: string;
+    isRunning: boolean;
+    startedAt?: string;
+    durationHours?: number;
+}
 
 interface SystemInfo {
     cpu: {
@@ -68,28 +53,107 @@ interface SystemInfo {
     };
 }
 
+interface DashboardStats {
+    totalStreams: number;
+    liveNow: number;
+    totalViews: number;
+    totalLiveHours: number;
+    liveStreams: StreamData[];
+}
+
 export default function DashboardPage() {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [systemLoading, setSystemLoading] = useState(true);
+    const [stats, setStats] = useState<DashboardStats>({
+        totalStreams: 0,
+        liveNow: 0,
+        totalViews: 0,
+        totalLiveHours: 0,
+        liveStreams: []
+    });
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    // Update time every second for real-time display
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Calculate live hours in real-time
+    const calculateTotalLiveSeconds = () => {
+        let totalSeconds = 0;
+        stats.liveStreams.forEach(stream => {
+            if (stream.isRunning && stream.startedAt) {
+                const startTime = new Date(stream.startedAt);
+                const now = currentTime;
+                const diffSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+                totalSeconds += Math.max(0, diffSeconds);
+            }
+        });
+        return totalSeconds;
+    };
+
+    const formatLiveTime = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            return `${hours}h ${minutes}m ${seconds}s`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds}s`;
+        }
+        return `${seconds}s`;
+    };
+
+    // Fetch streams data
+    const fetchStats = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/streams`);
+            if (response.ok) {
+                const streams: StreamData[] = await response.json();
+                const liveStreams = streams.filter(s => s.isRunning);
+
+                setStats({
+                    totalStreams: streams.length,
+                    liveNow: liveStreams.length,
+                    totalViews: 0, // Views not tracked currently
+                    totalLiveHours: 0,
+                    liveStreams: liveStreams
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching stats:", error);
+        }
+    };
+
+    // Fetch system info
+    const fetchSystemInfo = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/system`);
+            if (response.ok) {
+                const data = await response.json();
+                setSystemInfo(data);
+            }
+        } catch (error) {
+            console.error("Error fetching system info:", error);
+        } finally {
+            setSystemLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchSystemInfo = async () => {
-            try {
-                const response = await fetch(`${API_URL}/api/system`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setSystemInfo(data);
-                }
-            } catch (error) {
-                console.error("Error fetching system info:", error);
-            } finally {
-                setSystemLoading(false);
-            }
-        };
-
+        fetchStats();
         fetchSystemInfo();
+
         // Refresh every 5 seconds
-        const interval = setInterval(fetchSystemInfo, 5000);
+        const interval = setInterval(() => {
+            fetchStats();
+            fetchSystemInfo();
+        }, 5000);
+
         return () => clearInterval(interval);
     }, []);
 
@@ -105,6 +169,8 @@ export default function DashboardPage() {
         return "text-green-400";
     };
 
+    const totalLiveSeconds = calculateTotalLiveSeconds();
+
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -113,10 +179,107 @@ export default function DashboardPage() {
                     <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
                     <p className="text-gray-400 mt-1">Selamat datang kembali! Ini ringkasan streaming kamu.</p>
                 </div>
-                <Link href="/dashboard/upload" className="btn-primary text-center">
-                    + Tambah Stream Baru
+                <Link href="/dashboard/streams" className="btn-primary text-center">
+                    + Mulai Streaming
                 </Link>
             </div>
+
+            {/* Real-time Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Streams */}
+                <div className="card bg-gradient-to-br from-blue-600/20 to-blue-800/10 border-blue-500/30">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-gray-400 text-sm">Total Streams</p>
+                            <p className="text-3xl md:text-4xl font-bold mt-1">{stats.totalStreams}</p>
+                        </div>
+                        <span className="text-3xl">📺</span>
+                    </div>
+                    <p className="text-sm mt-2 text-blue-400">
+                        Semua stream yang dibuat
+                    </p>
+                </div>
+
+                {/* Live Now */}
+                <div className={`card border-2 ${stats.liveNow > 0 ? 'bg-gradient-to-br from-red-600/30 to-red-800/20 border-red-500/50 animate-pulse-slow' : 'bg-gradient-to-br from-gray-600/20 to-gray-800/10 border-gray-500/30'}`}>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-gray-400 text-sm">Live Sekarang</p>
+                            <p className="text-3xl md:text-4xl font-bold mt-1">{stats.liveNow}</p>
+                        </div>
+                        <span className="text-3xl">{stats.liveNow > 0 ? '🔴' : '⚪'}</span>
+                    </div>
+                    <p className={`text-sm mt-2 ${stats.liveNow > 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                        {stats.liveNow > 0 ? 'Sedang streaming...' : 'Tidak ada yang live'}
+                    </p>
+                </div>
+
+                {/* Total Views */}
+                <div className="card bg-gradient-to-br from-purple-600/20 to-purple-800/10 border-purple-500/30">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-gray-400 text-sm">Total Views</p>
+                            <p className="text-3xl md:text-4xl font-bold mt-1">-</p>
+                        </div>
+                        <span className="text-3xl">👁️</span>
+                    </div>
+                    <p className="text-sm mt-2 text-purple-400">
+                        (Fitur coming soon)
+                    </p>
+                </div>
+
+                {/* Live Time - Real-time */}
+                <div className="card bg-gradient-to-br from-green-600/20 to-green-800/10 border-green-500/30">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-gray-400 text-sm">Jam Live</p>
+                            <p className="text-2xl md:text-3xl font-bold mt-1 font-mono">
+                                {stats.liveNow > 0 ? formatLiveTime(totalLiveSeconds) : '0s'}
+                            </p>
+                        </div>
+                        <span className="text-3xl">⏱️</span>
+                    </div>
+                    <p className="text-sm mt-2 text-green-400">
+                        {stats.liveNow > 0 ? 'Real-time' : 'Tidak ada stream aktif'}
+                    </p>
+                </div>
+            </div>
+
+            {/* Live Streams Info */}
+            {stats.liveNow > 0 && (
+                <div className="card bg-gradient-to-r from-red-900/20 to-orange-900/20 border-red-500/30">
+                    <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                        Stream Aktif ({stats.liveNow})
+                    </h2>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {stats.liveStreams.map(stream => {
+                            const startTime = stream.startedAt ? new Date(stream.startedAt) : null;
+                            const streamSeconds = startTime
+                                ? Math.floor((currentTime.getTime() - startTime.getTime()) / 1000)
+                                : 0;
+
+                            return (
+                                <div key={stream.id} className="bg-gray-800/50 rounded-lg p-3">
+                                    <p className="font-medium truncate">{stream.title}</p>
+                                    <div className="flex justify-between items-center mt-2 text-sm">
+                                        <span className="text-gray-400">Mulai:</span>
+                                        <span className="text-green-400 font-mono">
+                                            {startTime?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-1 text-sm">
+                                        <span className="text-gray-400">Durasi:</span>
+                                        <span className="text-indigo-400 font-mono">
+                                            {formatLiveTime(streamSeconds)}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* VPS Specifications Card */}
             <div className="card bg-gradient-to-br from-gray-900/80 to-gray-800/50 border-indigo-500/30">
@@ -161,9 +324,6 @@ export default function DashboardPage() {
                                     style={{ width: `${systemInfo.cpu.usage}%` }}
                                 ></div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                                Kecepatan: {systemInfo.cpu.speedGHz} GHz
-                            </p>
                         </div>
 
                         {/* Memory */}
@@ -188,9 +348,6 @@ export default function DashboardPage() {
                                     style={{ width: `${systemInfo.memory.usagePercent}%` }}
                                 ></div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                                Tersedia: {systemInfo.memory.freeGB} GB
-                            </p>
                         </div>
 
                         {/* Storage */}
@@ -215,12 +372,9 @@ export default function DashboardPage() {
                                     style={{ width: `${systemInfo.disk.usagePercent}%` }}
                                 ></div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                                Tersedia: {systemInfo.disk.freeGB} GB
-                            </p>
                         </div>
 
-                        {/* Network / System Info */}
+                        {/* Network */}
                         <div className="bg-gray-800/50 rounded-lg p-4">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-gray-400 text-sm">Network</span>
@@ -232,126 +386,19 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 mb-2">
                                 Host: {systemInfo.system.hostname}
                             </p>
-                            <div className="flex items-center justify-between text-sm mb-1">
+                            <div className="flex items-center justify-between text-sm">
                                 <span className="text-gray-400">Platform</span>
                                 <span className="text-indigo-400 capitalize">
-                                    {systemInfo.system.platform === 'win32' ? 'Windows' :
-                                        systemInfo.system.platform === 'linux' ? 'Linux' :
-                                            systemInfo.system.platform === 'darwin' ? 'macOS' :
-                                                systemInfo.system.platform}
+                                    {systemInfo.system.platform === 'linux' ? 'Linux' : systemInfo.system.platform}
                                 </span>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-400">Arsitektur</span>
-                                <span className="text-indigo-400">{systemInfo.system.arch}</span>
-                            </div>
-                            {systemInfo.system.loadAverage[0] > 0 && (
-                                <p className="text-xs text-gray-500 mt-2">
-                                    Load: {systemInfo.system.loadAverage.map(l => l.toFixed(2)).join(', ')}
-                                </p>
-                            )}
                         </div>
                     </div>
                 ) : (
                     <div className="text-center py-8 text-gray-400">
                         <p>⚠️ Tidak dapat memuat informasi sistem.</p>
-                        <p className="text-sm mt-1">Pastikan backend server berjalan di port 3001.</p>
                     </div>
                 )}
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {stats.map((stat, index) => (
-                    <div key={index} className="card">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <p className="text-gray-400 text-sm">{stat.label}</p>
-                                <p className="text-2xl md:text-3xl font-bold mt-1">{stat.value}</p>
-                            </div>
-                            <span className="text-2xl">{stat.icon}</span>
-                        </div>
-                        <p className={`text-sm mt-2 ${stat.positive ? "text-green-400" : "text-red-400"}`}>
-                            {stat.change} dari kemarin
-                        </p>
-                    </div>
-                ))}
-            </div>
-
-            {/* Main Content Grid */}
-            <div className="grid lg:grid-cols-3 gap-6">
-                {/* Recent Streams */}
-                <div className="lg:col-span-2 card">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold">Stream Terbaru</h2>
-                        <Link href="/dashboard/streams" className="text-indigo-400 hover:text-indigo-300 text-sm">
-                            Lihat Semua →
-                        </Link>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="text-left text-gray-500 text-sm border-b border-gray-800">
-                                    <th className="pb-3 font-medium">Judul</th>
-                                    <th className="pb-3 font-medium hidden sm:table-cell">Platform</th>
-                                    <th className="pb-3 font-medium">Status</th>
-                                    <th className="pb-3 font-medium hidden md:table-cell">Viewers</th>
-                                    <th className="pb-3 font-medium hidden lg:table-cell">Durasi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800">
-                                {recentStreams.map((stream) => (
-                                    <tr key={stream.id} className="hover:bg-gray-800/50 transition-colors">
-                                        <td className="py-3">
-                                            <div className="font-medium truncate max-w-[200px]">{stream.title}</div>
-                                        </td>
-                                        <td className="py-3 hidden sm:table-cell">
-                                            <span className={`text-sm ${stream.platform === "YouTube" ? "text-red-400" : "text-blue-400"}`}>
-                                                {stream.platform}
-                                            </span>
-                                        </td>
-                                        <td className="py-3">
-                                            <span className={`
-                        inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
-                        ${stream.status === "live" ? "bg-green-500/20 text-green-400" :
-                                                    stream.status === "scheduled" ? "bg-yellow-500/20 text-yellow-400" :
-                                                        "bg-gray-500/20 text-gray-400"}`}>
-                                                {stream.status === "live" && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>}
-                                                {stream.status === "live" ? "Live" : stream.status === "scheduled" ? "Terjadwal" : "Berhenti"}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 hidden md:table-cell text-gray-400">
-                                            {stream.viewers > 0 ? stream.viewers.toLocaleString() : "-"}
-                                        </td>
-                                        <td className="py-3 hidden lg:table-cell text-gray-400 text-sm">
-                                            {stream.duration}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Activity Log */}
-                <div className="card">
-                    <h2 className="text-lg font-semibold mb-4">Aktivitas Terbaru</h2>
-                    <div className="space-y-4">
-                        {activityLog.map((activity, index) => (
-                            <div key={index} className="flex gap-3">
-                                <div className="w-2 h-2 mt-2 rounded-full bg-indigo-500 flex-shrink-0"></div>
-                                <div className="min-w-0">
-                                    <p className="text-sm">
-                                        <span className="text-gray-400">{activity.action}:</span>{" "}
-                                        <span className="font-medium truncate">{activity.stream}</span>
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
             </div>
 
             {/* Quick Actions */}
@@ -366,9 +413,9 @@ export default function DashboardPage() {
                         <span className="text-3xl block mb-2">📺</span>
                         <span className="text-sm text-gray-300">Kelola Stream</span>
                     </Link>
-                    <Link href="/dashboard/schedule" className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center">
-                        <span className="text-3xl block mb-2">📅</span>
-                        <span className="text-sm text-gray-300">Atur Jadwal</span>
+                    <Link href="/dashboard/videos" className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center">
+                        <span className="text-3xl block mb-2">🎬</span>
+                        <span className="text-sm text-gray-300">Video Library</span>
                     </Link>
                     <Link href="/dashboard/settings" className="p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors text-center">
                         <span className="text-3xl block mb-2">⚙️</span>

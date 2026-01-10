@@ -146,8 +146,8 @@ export default function LogsPage() {
                                     key={stream.id}
                                     onClick={() => setSelectedStreamId(stream.id)}
                                     className={`w-full p-3 rounded-lg text-left transition-colors ${selectedStreamId === stream.id
-                                            ? "bg-indigo-500/20 border border-indigo-500/50"
-                                            : "bg-gray-800/50 hover:bg-gray-800"
+                                        ? "bg-indigo-500/20 border border-indigo-500/50"
+                                        : "bg-gray-800/50 hover:bg-gray-800"
                                         }`}
                                 >
                                     <div className="flex items-center gap-2">
@@ -158,7 +158,7 @@ export default function LogsPage() {
                                     </div>
                                     <div className="flex items-center gap-2 mt-1">
                                         <span className={`text-xs ${stream.platform === "youtube" ? "text-red-400" :
-                                                stream.platform === "facebook" ? "text-blue-400" : "text-purple-400"
+                                            stream.platform === "facebook" ? "text-blue-400" : "text-purple-400"
                                             }`}>
                                             {stream.platform}
                                         </span>

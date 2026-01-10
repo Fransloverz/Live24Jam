@@ -90,61 +90,12 @@ router.post('/login', (req, res) => {
 });
 
 /**
- * POST /api/auth/register - Register new user
+ * POST /api/auth/register - Register new user (DISABLED)
  */
 router.post('/register', (req, res) => {
-    const { username, password, email } = req.body;
-
-    if (!username || !password || !email) {
-        return res.status(400).json({ error: 'Semua field diperlukan' });
-    }
-
-    if (password.length < 6) {
-        return res.status(400).json({ error: 'Password minimal 6 karakter' });
-    }
-
-    const users = getUsers();
-
-    // Check if username exists
-    if (users.find(u => u.username === username)) {
-        return res.status(400).json({ error: 'Username sudah digunakan' });
-    }
-
-    // Check if email exists
-    if (users.find(u => u.email === email)) {
-        return res.status(400).json({ error: 'Email sudah digunakan' });
-    }
-
-    // Create new user
-    const newUser = {
-        id: Date.now(),
-        username,
-        password: bcrypt.hashSync(password, 10),
-        email,
-        role: 'user',
-        createdAt: new Date().toISOString()
-    };
-
-    users.push(newUser);
-    saveUsers(users);
-
-    // Generate JWT token
-    const token = jwt.sign(
-        { id: newUser.id, username: newUser.username, role: newUser.role },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
-    );
-
-    res.status(201).json({
-        success: true,
-        message: 'Registrasi berhasil',
-        token,
-        user: {
-            id: newUser.id,
-            username: newUser.username,
-            email: newUser.email,
-            role: newUser.role
-        }
+    // Registration is disabled - single user mode
+    return res.status(403).json({
+        error: 'Registrasi dinonaktifkan. Hubungi admin untuk akses.'
     });
 });
 
