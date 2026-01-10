@@ -4,26 +4,59 @@ import { useState, useEffect } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+// Platform presets
+const PLATFORM_PRESETS = {
+    youtube: {
+        name: "YouTube",
+        icon: "🔴",
+        rtmpUrl: "rtmp://a.rtmp.youtube.com/live2",
+        color: "text-red-400"
+    },
+    facebook: {
+        name: "Facebook",
+        icon: "🔵",
+        rtmpUrl: "rtmp://live-api-s.facebook.com:443/rtmp/",
+        color: "text-blue-400"
+    },
+    tiktok: {
+        name: "TikTok",
+        icon: "🎵",
+        rtmpUrl: "rtmp://push.tiktok.com/live/",
+        color: "text-pink-400"
+    },
+    twitch: {
+        name: "Twitch",
+        icon: "💜",
+        rtmpUrl: "rtmp://live.twitch.tv/app/",
+        color: "text-purple-400"
+    },
+    instagram: {
+        name: "Instagram",
+        icon: "📷",
+        rtmpUrl: "rtmp://live-upload.instagram.com/rtmp/",
+        color: "text-pink-500"
+    },
+    custom: {
+        name: "Custom RTMP",
+        icon: "⚙️",
+        rtmpUrl: "",
+        color: "text-gray-400"
+    }
+};
+
 interface Schedule {
     id: number;
     title: string;
-    streamId: number;
-    videoFile?: string;
-    scheduleType: 'recurring' | 'once';  // recurring = hari berulang, once = tanggal spesifik
-    days?: string[];          // untuk recurring
-    specificDate?: string;    // untuk once (YYYY-MM-DD)
-    startTime: string;
-    endTime: string;
-    active: boolean;
-    lastRun?: string;
-}
-
-interface Stream {
-    id: number;
-    title: string;
     platform: string;
-    videoFile?: string;
+    rtmpUrl: string;
+    streamKey: string;
+    videoFile: string;
+    quality: string;
+    startDateTime: string;  // Full datetime: YYYY-MM-DDTHH:mm
+    endDateTime: string;    // Full datetime: YYYY-MM-DDTHH:mm
+    active: boolean;
     isRunning?: boolean;
+    lastRun?: string;
 }
 
 interface VideoFile {
@@ -31,58 +64,60 @@ interface VideoFile {
     sizeFormatted: string;
 }
 
-const dayLabels: { [key: string]: string } = {
-    mon: "Sen",
-    tue: "Sel",
-    wed: "Rab",
-    thu: "Kam",
-    fri: "Jum",
-    sat: "Sab",
-    sun: "Min",
-};
-
 export default function SchedulePage() {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
-    const [streams, setStreams] = useState<Stream[]>([]);
     const [videos, setVideos] = useState<VideoFile[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
+    const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+    // Get current datetime for default values
+    const now = new Date();
+    const defaultStart = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+    const defaultEnd = new Date(now.getTime() + 3 * 60 * 60 * 1000); // 3 hours from now
+
+    const formatDateTimeLocal = (date: Date) => {
+        return date.toISOString().slice(0, 16);
+    };
+
     const [formData, setFormData] = useState({
         title: "",
-        streamId: "",
+        platform: "youtube",
+        rtmpUrl: PLATFORM_PRESETS.youtube.rtmpUrl,
+        streamKey: "",
         videoFile: "",
-        scheduleType: "once" as 'recurring' | 'once',
-        days: [] as string[],
-        specificDate: "",
-        startTime: "",
-        endTime: "",
+        quality: "1080p",
+        startDateTime: formatDateTimeLocal(defaultStart),
+        endDateTime: formatDateTimeLocal(defaultEnd),
     });
 
-    // Fetch schedules and streams
+    // Handle platform change
+    const handlePlatformChange = (platform: string) => {
+        const preset = PLATFORM_PRESETS[platform as keyof typeof PLATFORM_PRESETS];
+        setFormData({
+            ...formData,
+            platform,
+            rtmpUrl: preset?.rtmpUrl || ""
+        });
+    };
+
     useEffect(() => {
         fetchData();
-        // Refresh every 10 seconds
         const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
     }, []);
 
     const fetchData = async () => {
         try {
-            const [schedulesRes, streamsRes, videosRes] = await Promise.all([
+            const [schedulesRes, videosRes] = await Promise.all([
                 fetch(`${API_URL}/api/schedules`),
-                fetch(`${API_URL}/api/streams`),
                 fetch(`${API_URL}/api/videos`)
             ]);
 
             if (schedulesRes.ok) {
                 const data = await schedulesRes.json();
                 setSchedules(data);
-            }
-
-            if (streamsRes.ok) {
-                const data = await streamsRes.json();
-                setStreams(data);
             }
 
             if (videosRes.ok) {
@@ -96,65 +131,49 @@ export default function SchedulePage() {
         }
     };
 
-    // Manual start stream from schedule
-    const manualStartStream = async (schedule: Schedule) => {
-        const stream = streams.find(s => s.id === schedule.streamId);
-        if (!stream) {
-            alert("Stream tidak ditemukan!");
-            return;
-        }
-
-        if (stream.isRunning) {
-            alert("Stream sudah berjalan!");
-            return;
-        }
-
+    // Manual start streaming
+    const startStreaming = async (schedule: Schedule) => {
+        setActionLoading(schedule.id);
         try {
-            const response = await fetch(`${API_URL}/api/streams/${stream.id}/start`, {
+            const response = await fetch(`${API_URL}/api/schedules/${schedule.id}/start`, {
                 method: "POST"
             });
 
             if (response.ok) {
-                alert(`✅ Stream "${stream.title}" berhasil dimulai!`);
+                alert(`✅ Streaming "${schedule.title}" berhasil dimulai!`);
                 await fetchData();
             } else {
                 const error = await response.json();
-                alert(error.error || "Gagal memulai stream");
+                alert(error.error || "Gagal memulai streaming");
             }
         } catch (error) {
             console.error("Error starting stream:", error);
             alert("Gagal menghubungi server");
+        } finally {
+            setActionLoading(null);
         }
     };
 
-    // Manual stop stream
-    const manualStopStream = async (schedule: Schedule) => {
-        const stream = streams.find(s => s.id === schedule.streamId);
-        if (!stream) {
-            alert("Stream tidak ditemukan!");
-            return;
-        }
-
-        if (!stream.isRunning) {
-            alert("Stream tidak sedang berjalan!");
-            return;
-        }
-
+    // Manual stop streaming
+    const stopStreaming = async (schedule: Schedule) => {
+        setActionLoading(schedule.id);
         try {
-            const response = await fetch(`${API_URL}/api/streams/${stream.id}/stop`, {
+            const response = await fetch(`${API_URL}/api/schedules/${schedule.id}/stop`, {
                 method: "POST"
             });
 
             if (response.ok) {
-                alert(`⏹️ Stream "${stream.title}" berhasil dihentikan!`);
+                alert(`⏹️ Streaming "${schedule.title}" berhasil dihentikan!`);
                 await fetchData();
             } else {
                 const error = await response.json();
-                alert(error.error || "Gagal menghentikan stream");
+                alert(error.error || "Gagal menghentikan streaming");
             }
         } catch (error) {
             console.error("Error stopping stream:", error);
             alert("Gagal menghubungi server");
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -192,52 +211,45 @@ export default function SchedulePage() {
             setEditingSchedule(schedule);
             setFormData({
                 title: schedule.title,
-                streamId: schedule.streamId.toString(),
+                platform: schedule.platform || "youtube",
+                rtmpUrl: schedule.rtmpUrl || PLATFORM_PRESETS.youtube.rtmpUrl,
+                streamKey: schedule.streamKey || "",
                 videoFile: schedule.videoFile || "",
-                scheduleType: schedule.scheduleType || 'once',
-                days: schedule.days || [],
-                specificDate: schedule.specificDate || "",
-                startTime: schedule.startTime,
-                endTime: schedule.endTime,
+                quality: schedule.quality || "1080p",
+                startDateTime: schedule.startDateTime || formatDateTimeLocal(defaultStart),
+                endDateTime: schedule.endDateTime || formatDateTimeLocal(defaultEnd),
             });
         } else {
             setEditingSchedule(null);
-            // Set default date to today
-            const today = new Date().toISOString().split('T')[0];
             setFormData({
                 title: "",
-                streamId: "",
+                platform: "youtube",
+                rtmpUrl: PLATFORM_PRESETS.youtube.rtmpUrl,
+                streamKey: "",
                 videoFile: "",
-                scheduleType: "once",
-                days: [],
-                specificDate: today,
-                startTime: "",
-                endTime: ""
+                quality: "1080p",
+                startDateTime: formatDateTimeLocal(defaultStart),
+                endDateTime: formatDateTimeLocal(defaultEnd),
             });
         }
         setShowModal(true);
     };
 
     const saveSchedule = async () => {
-        if (!formData.title || !formData.streamId || !formData.startTime || !formData.endTime) {
+        if (!formData.title || !formData.streamKey || !formData.videoFile || !formData.startDateTime || !formData.endDateTime) {
             alert("Lengkapi semua field!");
             return;
         }
 
-        if (formData.scheduleType === 'recurring' && formData.days.length === 0) {
-            alert("Pilih minimal 1 hari untuk jadwal berulang!");
-            return;
-        }
-
-        if (formData.scheduleType === 'once' && !formData.specificDate) {
-            alert("Pilih tanggal untuk jadwal!");
+        // Validate end time is after start time
+        if (new Date(formData.endDateTime) <= new Date(formData.startDateTime)) {
+            alert("Waktu selesai harus setelah waktu mulai!");
             return;
         }
 
         try {
             const payload = {
-                ...formData,
-                streamId: parseInt(formData.streamId)
+                ...formData
             };
 
             if (editingSchedule) {
@@ -268,26 +280,15 @@ export default function SchedulePage() {
         }
     };
 
-    const toggleDay = (day: string) => {
-        setFormData({
-            ...formData,
-            days: formData.days.includes(day)
-                ? formData.days.filter((d) => d !== day)
-                : [...formData.days, day],
-        });
-    };
-
-    const getStreamInfo = (streamId: number) => {
-        return streams.find(s => s.id === streamId);
-    };
-
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('id-ID', {
-            weekday: 'long',
+    const formatDateTime = (dateTimeStr: string) => {
+        const date = new Date(dateTimeStr);
+        return date.toLocaleString('id-ID', {
+            weekday: 'short',
             day: 'numeric',
-            month: 'long',
-            year: 'numeric'
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
         });
     };
 
@@ -304,119 +305,89 @@ export default function SchedulePage() {
             {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold">Jadwal Stream</h1>
-                    <p className="text-gray-400 mt-1">Atur jadwal otomatis untuk live streaming.</p>
+                    <h1 className="text-2xl md:text-3xl font-bold">Jadwal Live Streaming</h1>
+                    <p className="text-gray-400 mt-1">Buat jadwal streaming dengan tanggal dan waktu spesifik.</p>
                 </div>
                 <button onClick={() => openModal()} className="btn-primary">
-                    + Tambah Jadwal
+                    + Buat Jadwal Baru
                 </button>
             </div>
 
-            {/* Info Cards */}
-            <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
-                    <p className="text-indigo-400 text-sm">
-                        📅 <strong>Jadwal Sekali:</strong> Stream akan berjalan pada tanggal dan jam tertentu
-                    </p>
-                </div>
-                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                    <p className="text-green-400 text-sm">
-                        🔁 <strong>Jadwal Berulang:</strong> Stream akan berjalan di hari-hari yang dipilih setiap minggu
-                    </p>
-                </div>
+            {/* Info Card */}
+            <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-xl p-4">
+                <p className="text-indigo-400 text-sm">
+                    💡 <strong>Cara kerja:</strong> Buat jadwal dengan memasukkan stream key langsung. Streaming akan otomatis dimulai dan berhenti sesuai waktu yang Anda tentukan. Anda juga bisa start/stop secara manual kapan saja.
+                </p>
             </div>
 
             {/* Schedule List */}
             <div className="space-y-4">
                 {schedules.map((schedule) => {
-                    const stream = getStreamInfo(schedule.streamId);
-                    const isStreamRunning = stream?.isRunning || false;
+                    const platform = PLATFORM_PRESETS[schedule.platform as keyof typeof PLATFORM_PRESETS];
+                    const isLoading = actionLoading === schedule.id;
 
                     return (
                         <div key={schedule.id} className={`card ${!schedule.active && "opacity-60"}`}>
                             <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                                 {/* Info */}
                                 <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                    <div className="flex items-center gap-3 mb-3 flex-wrap">
                                         <h3 className="font-semibold text-lg">{schedule.title}</h3>
-                                        <span className={`text-xs px-2 py-1 rounded-full ${schedule.active
-                                            ? "bg-green-500/20 text-green-400"
-                                            : "bg-gray-500/20 text-gray-400"
-                                            }`}>
-                                            {schedule.active ? "Aktif" : "Nonaktif"}
+                                        <span className={`text-xs px-2 py-1 rounded-full ${platform?.color || 'text-gray-400'} bg-gray-800`}>
+                                            {platform?.icon} {platform?.name || schedule.platform}
                                         </span>
-                                        {isStreamRunning && (
+                                        {schedule.active && (
+                                            <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400">
+                                                ✅ Aktif
+                                            </span>
+                                        )}
+                                        {schedule.isRunning && (
                                             <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-400 flex items-center gap-1">
                                                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                                                 LIVE
                                             </span>
                                         )}
-                                        <span className={`text-xs px-2 py-1 rounded-full ${schedule.scheduleType === 'once'
-                                                ? "bg-blue-500/20 text-blue-400"
-                                                : "bg-purple-500/20 text-purple-400"
-                                            }`}>
-                                            {schedule.scheduleType === 'once' ? '📅 Sekali' : '🔁 Berulang'}
-                                        </span>
                                     </div>
 
-                                    <p className="text-gray-500 text-sm mb-1">
-                                        📺 {stream?.title || "Stream tidak ditemukan"}
+                                    {/* Video Info */}
+                                    <p className="text-gray-500 text-sm mb-3">
+                                        🎬 {schedule.videoFile} • {schedule.quality}
                                     </p>
 
-                                    {schedule.videoFile && (
-                                        <p className="text-gray-500 text-sm mb-2">
-                                            🎬 Video: {schedule.videoFile}
-                                        </p>
-                                    )}
-
-                                    {/* Schedule timing */}
-                                    {schedule.scheduleType === 'once' && schedule.specificDate ? (
-                                        <div className="bg-blue-500/10 rounded-lg px-3 py-2 mb-2 inline-block">
-                                            <p className="text-blue-400 text-sm font-medium">
-                                                📆 {formatDate(schedule.specificDate)}
-                                            </p>
-                                            <p className="text-blue-300 text-sm">
-                                                ⏰ {schedule.startTime} - {schedule.endTime}
+                                    {/* Datetime Info */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="bg-green-500/10 rounded-lg px-3 py-2">
+                                            <p className="text-green-400 text-xs font-medium mb-1">🟢 MULAI</p>
+                                            <p className="text-green-300 text-sm font-mono">
+                                                {formatDateTime(schedule.startDateTime)}
                                             </p>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className="flex flex-wrap gap-2 mb-2">
-                                                {Object.keys(dayLabels).map((day) => (
-                                                    <span
-                                                        key={day}
-                                                        className={`text-xs px-2 py-1 rounded ${schedule.days?.includes(day)
-                                                            ? "bg-indigo-500/20 text-indigo-400"
-                                                            : "bg-gray-800 text-gray-600"
-                                                            }`}
-                                                    >
-                                                        {dayLabels[day]}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                            <p className="text-gray-400 text-sm">
-                                                ⏰ {schedule.startTime} - {schedule.endTime}
+                                        <div className="bg-red-500/10 rounded-lg px-3 py-2">
+                                            <p className="text-red-400 text-xs font-medium mb-1">🔴 SELESAI</p>
+                                            <p className="text-red-300 text-sm font-mono">
+                                                {formatDateTime(schedule.endDateTime)}
                                             </p>
-                                        </>
-                                    )}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Actions */}
                                 <div className="flex flex-wrap gap-2">
-                                    {/* Manual Start/Stop */}
-                                    {isStreamRunning ? (
+                                    {schedule.isRunning ? (
                                         <button
-                                            onClick={() => manualStopStream(schedule)}
-                                            className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 font-medium transition-colors"
+                                            onClick={() => stopStreaming(schedule)}
+                                            disabled={isLoading}
+                                            className={`px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium transition-colors ${isLoading ? 'opacity-50 cursor-wait' : ''}`}
                                         >
-                                            ⏹️ Stop Manual
+                                            {isLoading ? '⏳' : '⏹️'} Stop Manual
                                         </button>
                                     ) : (
                                         <button
-                                            onClick={() => manualStartStream(schedule)}
-                                            className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 font-medium transition-colors"
+                                            onClick={() => startStreaming(schedule)}
+                                            disabled={isLoading}
+                                            className={`px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition-colors ${isLoading ? 'opacity-50 cursor-wait' : ''}`}
                                         >
-                                            ▶️ Start Manual
+                                            {isLoading ? '⏳' : '▶️'} Start Manual
                                         </button>
                                     )}
 
@@ -427,13 +398,13 @@ export default function SchedulePage() {
                                             : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
                                             }`}
                                     >
-                                        {schedule.active ? "⏸️ Pause" : "▶️ Aktifkan"}
+                                        {schedule.active ? "⏸️ Pause Auto" : "▶️ Aktifkan Auto"}
                                     </button>
                                     <button
                                         onClick={() => openModal(schedule)}
                                         className="px-4 py-2 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
                                     >
-                                        ✏️ Edit
+                                        ✏️
                                     </button>
                                     <button
                                         onClick={() => deleteSchedule(schedule.id)}
@@ -450,10 +421,10 @@ export default function SchedulePage() {
                 {schedules.length === 0 && (
                     <div className="card text-center py-12">
                         <span className="text-6xl block mb-4">📅</span>
-                        <h3 className="text-xl font-semibold mb-2">Belum ada jadwal</h3>
-                        <p className="text-gray-400 mb-4">Buat jadwal untuk mengotomasi live streaming kamu</p>
+                        <h3 className="text-xl font-semibold mb-2">Belum ada jadwal streaming</h3>
+                        <p className="text-gray-400 mb-4">Buat jadwal baru dengan memasukkan stream key langsung</p>
                         <button onClick={() => openModal()} className="btn-primary">
-                            + Tambah Jadwal
+                            + Buat Jadwal Baru
                         </button>
                     </div>
                 )}
@@ -462,58 +433,90 @@ export default function SchedulePage() {
             {/* Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-                        <h2 className="text-xl font-bold mb-4">
-                            {editingSchedule ? "Edit Jadwal" : "Tambah Jadwal Baru"}
-                        </h2>
+                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold">
+                                {editingSchedule ? "Edit Jadwal" : "Buat Jadwal Streaming Baru"}
+                            </h2>
+                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white text-2xl">
+                                ×
+                            </button>
+                        </div>
 
                         <div className="space-y-4">
+                            {/* Title */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    Nama Jadwal
+                                    Judul Streaming
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.title}
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white placeholder-gray-500"
-                                    placeholder="Contoh: Morning Jazz"
+                                    placeholder="Contoh: Jazz Music 24/7"
                                 />
                             </div>
 
+                            {/* Platform */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    Pilih Stream
+                                    Platform
                                 </label>
                                 <select
-                                    value={formData.streamId}
-                                    onChange={(e) => setFormData({ ...formData, streamId: e.target.value })}
+                                    value={formData.platform}
+                                    onChange={(e) => handlePlatformChange(e.target.value)}
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
                                 >
-                                    <option value="">-- Pilih Stream --</option>
-                                    {streams.map(stream => (
-                                        <option key={stream.id} value={stream.id}>
-                                            {stream.title} ({stream.platform})
+                                    {Object.entries(PLATFORM_PRESETS).map(([key, preset]) => (
+                                        <option key={key} value={key}>
+                                            {preset.icon} {preset.name}
                                         </option>
                                     ))}
                                 </select>
-                                {streams.length === 0 && (
-                                    <p className="text-yellow-400 text-xs mt-1">
-                                        ⚠️ Belum ada stream. Buat stream terlebih dahulu.
-                                    </p>
-                                )}
                             </div>
 
+                            {/* RTMP URL */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    🎬 Pilih Video (Opsional)
+                                    RTMP URL
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.rtmpUrl}
+                                    onChange={(e) => setFormData({ ...formData, rtmpUrl: e.target.value })}
+                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white font-mono text-sm"
+                                />
+                            </div>
+
+                            {/* Stream Key */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    🔑 Stream Key
+                                </label>
+                                <input
+                                    type="password"
+                                    value={formData.streamKey}
+                                    onChange={(e) => setFormData({ ...formData, streamKey: e.target.value })}
+                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                    placeholder="Paste stream key dari platform"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    📌 Dapatkan dari YouTube Studio / Facebook Live Producer
+                                </p>
+                            </div>
+
+                            {/* Video Selection */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    🎬 Pilih Video
                                 </label>
                                 <select
                                     value={formData.videoFile}
                                     onChange={(e) => setFormData({ ...formData, videoFile: e.target.value })}
                                     className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
                                 >
-                                    <option value="">-- Gunakan video dari stream --</option>
+                                    <option value="">-- Pilih Video --</option>
                                     {videos.map(video => (
                                         <option key={video.name} value={video.name}>
                                             📹 {video.name} ({video.sizeFormatted})
@@ -522,107 +525,61 @@ export default function SchedulePage() {
                                 </select>
                             </div>
 
-                            {/* Schedule Type */}
+                            {/* Quality */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    Tipe Jadwal
+                                    Kualitas
                                 </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, scheduleType: 'once' })}
-                                        className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${formData.scheduleType === 'once'
-                                                ? "bg-blue-500 text-white"
-                                                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                                            }`}
-                                    >
-                                        📅 Sekali (Tanggal)
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, scheduleType: 'recurring' })}
-                                        className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors ${formData.scheduleType === 'recurring'
-                                                ? "bg-purple-500 text-white"
-                                                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                                            }`}
-                                    >
-                                        🔁 Berulang (Hari)
-                                    </button>
-                                </div>
+                                <select
+                                    value={formData.quality}
+                                    onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
+                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
+                                >
+                                    <option value="720p">720p (HD)</option>
+                                    <option value="1080p">1080p (Full HD)</option>
+                                    <option value="4K">4K (Ultra HD)</option>
+                                </select>
                             </div>
 
-                            {/* Date/Day Selection */}
-                            {formData.scheduleType === 'once' ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        📆 Pilih Tanggal
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={formData.specificDate}
-                                        onChange={(e) => setFormData({ ...formData, specificDate: e.target.value })}
-                                        min={new Date().toISOString().split('T')[0]}
-                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
-                                    />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Pilih Hari (Setiap Minggu)
-                                    </label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {Object.entries(dayLabels).map(([day, label]) => (
-                                            <button
-                                                key={day}
-                                                type="button"
-                                                onClick={() => toggleDay(day)}
-                                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${formData.days.includes(day)
-                                                    ? "bg-indigo-500 text-white"
-                                                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-                                                    }`}
-                                            >
-                                                {label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            {/* Start DateTime */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    🟢 Tanggal & Jam Mulai
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    value={formData.startDateTime}
+                                    onChange={(e) => setFormData({ ...formData, startDateTime: e.target.value })}
+                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white"
+                                />
+                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Jam Mulai
-                                    </label>
-                                    <input
-                                        type="time"
-                                        value={formData.startTime}
-                                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Jam Selesai
-                                    </label>
-                                    <input
-                                        type="time"
-                                        value={formData.endTime}
-                                        onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 text-white"
-                                    />
-                                </div>
+                            {/* End DateTime */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    🔴 Tanggal & Jam Selesai
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    value={formData.endDateTime}
+                                    onChange={(e) => setFormData({ ...formData, endDateTime: e.target.value })}
+                                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white"
+                                />
                             </div>
                         </div>
 
                         <div className="flex gap-4 mt-6">
                             <button
                                 onClick={() => setShowModal(false)}
-                                className="btn-secondary flex-1"
+                                className="flex-1 py-3 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
                             >
                                 Batal
                             </button>
-                            <button onClick={saveSchedule} className="btn-primary flex-1">
-                                Simpan
+                            <button
+                                onClick={saveSchedule}
+                                className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-colors font-medium"
+                            >
+                                💾 Simpan Jadwal
                             </button>
                         </div>
                     </div>

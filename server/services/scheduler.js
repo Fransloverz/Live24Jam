@@ -4,21 +4,12 @@ const ffmpegService = require('./ffmpeg');
 
 // Data file path
 const SCHEDULES_FILE = path.join(__dirname, '../data/schedules.json');
-const STREAMS_FILE = path.join(__dirname, '../data/streams.json');
 
 // Scheduler check interval (every minute)
 const CHECK_INTERVAL = 60000;
 
-// Day mapping
-const DAY_MAP = {
-    0: 'sun',
-    1: 'mon',
-    2: 'tue',
-    3: 'wed',
-    4: 'thu',
-    5: 'fri',
-    6: 'sat'
-};
+// Track running schedule streams
+const runningScheduleStreams = new Map();
 
 /**
  * Load schedules from file
@@ -49,25 +40,14 @@ function saveSchedules(schedules) {
 }
 
 /**
- * Load streams from file
- */
-function loadStreams() {
-    try {
-        if (fs.existsSync(STREAMS_FILE)) {
-            const data = fs.readFileSync(STREAMS_FILE, 'utf8');
-            return JSON.parse(data);
-        }
-    } catch (error) {
-        console.error('Error loading streams:', error);
-    }
-    return [];
-}
-
-/**
- * Get all schedules
+ * Get all schedules with running status
  */
 function getSchedules() {
-    return loadSchedules();
+    const schedules = loadSchedules();
+    return schedules.map(s => ({
+        ...s,
+        isRunning: runningScheduleStreams.has(s.id)
+    }));
 }
 
 /**
@@ -75,24 +55,28 @@ function getSchedules() {
  */
 function getScheduleById(id) {
     const schedules = loadSchedules();
-    return schedules.find(s => s.id === id);
+    const schedule = schedules.find(s => s.id === id);
+    if (schedule) {
+        schedule.isRunning = runningScheduleStreams.has(id);
+    }
+    return schedule;
 }
 
 /**
- * Create a new schedule
+ * Create a new schedule with direct stream key
  */
 function createSchedule(scheduleData) {
     const schedules = loadSchedules();
     const newSchedule = {
         id: Date.now(),
         title: scheduleData.title,
-        streamId: scheduleData.streamId,
-        scheduleType: scheduleData.scheduleType || 'recurring', // 'once' or 'recurring'
-        specificDate: scheduleData.specificDate || null, // for 'once' type: YYYY-MM-DD
-        days: scheduleData.days || [],
-        startTime: scheduleData.startTime,
-        endTime: scheduleData.endTime,
-        videoFile: scheduleData.videoFile || null,
+        platform: scheduleData.platform || 'youtube',
+        rtmpUrl: scheduleData.rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+        streamKey: scheduleData.streamKey,
+        videoFile: scheduleData.videoFile,
+        quality: scheduleData.quality || '1080p',
+        startDateTime: scheduleData.startDateTime,
+        endDateTime: scheduleData.endDateTime,
         active: true,
         createdAt: new Date().toISOString(),
         lastRun: null
@@ -119,6 +103,11 @@ function updateSchedule(id, updates) {
  * Delete a schedule
  */
 function deleteSchedule(id) {
+    // Stop if running
+    if (runningScheduleStreams.has(id)) {
+        stopScheduleStream(id);
+    }
+
     const schedules = loadSchedules();
     const filtered = schedules.filter(s => s.id !== id);
     if (filtered.length === schedules.length) return false;
@@ -136,108 +125,112 @@ function toggleSchedule(id) {
 
     schedule.active = !schedule.active;
     saveSchedules(schedules);
-    return schedule;
+    return { ...schedule, isRunning: runningScheduleStreams.has(id) };
 }
 
 /**
- * Check if current time matches schedule
+ * Manually start streaming for a schedule
  */
-function isTimeInRange(startTime, endTime) {
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
-
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-
-    // Handle overnight schedules (e.g., 22:00 - 06:00)
-    if (endMinutes < startMinutes) {
-        return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+async function startScheduleStream(id) {
+    const schedule = getScheduleById(id);
+    if (!schedule) {
+        return { success: false, error: 'Schedule not found' };
     }
 
-    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    if (runningScheduleStreams.has(id)) {
+        return { success: false, error: 'Stream is already running' };
+    }
+
+    // Create stream config from schedule
+    const streamConfig = {
+        id: schedule.id,
+        title: schedule.title,
+        rtmpUrl: schedule.rtmpUrl,
+        streamKey: schedule.streamKey,
+        videoFile: schedule.videoFile,
+        quality: schedule.quality
+    };
+
+    try {
+        await ffmpegService.startStream(streamConfig);
+        runningScheduleStreams.set(id, true);
+
+        // Update last run
+        const schedules = loadSchedules();
+        const scheduleIndex = schedules.findIndex(s => s.id === id);
+        if (scheduleIndex !== -1) {
+            schedules[scheduleIndex].lastRun = new Date().toISOString();
+            saveSchedules(schedules);
+        }
+
+        console.log(`✅ Manual start: Schedule "${schedule.title}" stream started`);
+        return { success: true, schedule };
+    } catch (error) {
+        console.error(`❌ Failed to start schedule stream:`, error);
+        return { success: false, error: error.message };
+    }
 }
 
 /**
- * Check if today matches specific date (for 'once' type schedules)
+ * Manually stop streaming for a schedule
  */
-function isDateMatch(specificDate) {
-    if (!specificDate) return false;
-    const today = new Date();
-    const scheduleDate = new Date(specificDate);
-    return today.getFullYear() === scheduleDate.getFullYear() &&
-        today.getMonth() === scheduleDate.getMonth() &&
-        today.getDate() === scheduleDate.getDate();
+async function stopScheduleStream(id) {
+    const schedule = getScheduleById(id);
+    if (!schedule) {
+        return { success: false, error: 'Schedule not found' };
+    }
+
+    if (!runningScheduleStreams.has(id)) {
+        return { success: false, error: 'Stream is not running' };
+    }
+
+    try {
+        ffmpegService.stopStream(id);
+        runningScheduleStreams.delete(id);
+        console.log(`✅ Manual stop: Schedule "${schedule.title}" stream stopped`);
+        return { success: true, schedule };
+    } catch (error) {
+        console.error(`❌ Failed to stop schedule stream:`, error);
+        return { success: false, error: error.message };
+    }
 }
 
 /**
- * Check if current day matches schedule (for 'recurring' type)
+ * Check if current time is within schedule datetime range
  */
-function isDayMatch(days) {
-    if (!days || days.length === 0) return false;
-    const today = DAY_MAP[new Date().getDay()];
-    return days.includes(today);
+function isWithinScheduleTime(startDateTime, endDateTime) {
+    const now = new Date();
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    return now >= start && now < end;
 }
 
 /**
- * Check and execute schedules
+ * Check and execute schedules based on datetime
  */
 function checkSchedules() {
     const schedules = loadSchedules();
-    const streams = loadStreams();
+    const now = new Date();
 
     for (const schedule of schedules) {
         if (!schedule.active) continue;
-        if (!schedule.streamId) continue;
+        if (!schedule.startDateTime || !schedule.endDateTime) continue;
 
-        const stream = streams.find(s => s.id === schedule.streamId);
-        if (!stream) continue;
+        const isRunning = runningScheduleStreams.has(schedule.id);
+        const shouldRun = isWithinScheduleTime(schedule.startDateTime, schedule.endDateTime);
+        const endTime = new Date(schedule.endDateTime);
 
-        const isRunning = ffmpegService.isStreamRunning(stream.id);
-        const timeMatch = isTimeInRange(schedule.startTime, schedule.endTime);
-
-        // Check date/day match based on schedule type
-        let dateMatch = false;
-        if (schedule.scheduleType === 'once') {
-            // Specific date schedule
-            dateMatch = isDateMatch(schedule.specificDate);
-        } else {
-            // Recurring (weekly) schedule - default behavior
-            dateMatch = isDayMatch(schedule.days || []);
-        }
-
-        if (dateMatch && timeMatch) {
-            // Should be running
-            if (!isRunning) {
-                console.log(`⏰ Schedule: Starting stream "${stream.title}" (schedule: ${schedule.title})`);
-                ffmpegService.startStream(stream)
-                    .then(() => {
-                        console.log(`✅ Schedule: Stream "${stream.title}" started successfully`);
-                        // Update last run
-                        schedule.lastRun = new Date().toISOString();
-                        saveSchedules(schedules);
-                    })
-                    .catch(err => {
-                        console.error(`❌ Schedule: Failed to start stream:`, err.message);
-                    });
-            }
-        } else {
-            // Should be stopped (only if this schedule started it)
-            // Note: we don't auto-stop manual streams
-            if (isRunning && schedule.lastRun) {
-                // Check if this schedule was the one that started the stream
-                const lastRunTime = new Date(schedule.lastRun).getTime();
-                const hoursSinceRun = (Date.now() - lastRunTime) / (1000 * 60 * 60);
-
-                // Only auto-stop if schedule started within last 24 hours
-                if (hoursSinceRun < 24) {
-                    console.log(`⏰ Schedule: Stopping stream "${stream.title}" (outside schedule: ${schedule.title})`);
-                    ffmpegService.stopStream(stream.id);
-                    console.log(`✅ Schedule: Stream "${stream.title}" stopped`);
-                }
-            }
+        if (shouldRun && !isRunning) {
+            // Should be running - start stream
+            console.log(`⏰ Auto-start: Schedule "${schedule.title}" starting...`);
+            startScheduleStream(schedule.id);
+        } else if (!shouldRun && isRunning) {
+            // Past end time - stop stream
+            console.log(`⏰ Auto-stop: Schedule "${schedule.title}" ending...`);
+            stopScheduleStream(schedule.id);
+        } else if (now > endTime && !isRunning) {
+            // Past end time and not running - deactivate one-time schedules
+            // Keep active for recurring or manual restart later
         }
     }
 }
@@ -248,7 +241,7 @@ function checkSchedules() {
 function startScheduler() {
     console.log('📅 Starting stream scheduler service...');
 
-    // Initial check
+    // Initial check after 5 seconds
     setTimeout(() => {
         checkSchedules();
     }, 5000);
@@ -271,5 +264,7 @@ module.exports = {
     updateSchedule,
     deleteSchedule,
     toggleSchedule,
+    startScheduleStream,
+    stopScheduleStream,
     checkSchedules
 };

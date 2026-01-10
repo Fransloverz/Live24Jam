@@ -36,26 +36,25 @@ router.get('/:id', (req, res) => {
 });
 
 /**
- * POST /api/schedules - Create a new schedule
+ * POST /api/schedules - Create a new schedule with direct stream key
  */
 router.post('/', (req, res) => {
     try {
-        const { title, streamId, days, startTime, endTime } = req.body;
+        const { title, platform, rtmpUrl, streamKey, videoFile, quality, startDateTime, endDateTime } = req.body;
 
-        if (!title || !streamId || !days || !startTime || !endTime) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        if (!Array.isArray(days) || days.length === 0) {
-            return res.status(400).json({ error: 'At least one day must be selected' });
+        if (!title || !streamKey || !videoFile || !startDateTime || !endDateTime) {
+            return res.status(400).json({ error: 'Missing required fields: title, streamKey, videoFile, startDateTime, endDateTime' });
         }
 
         const schedule = schedulerService.createSchedule({
             title,
-            streamId: parseInt(streamId),
-            days,
-            startTime,
-            endTime
+            platform: platform || 'youtube',
+            rtmpUrl: rtmpUrl || 'rtmp://a.rtmp.youtube.com/live2',
+            streamKey,
+            videoFile,
+            quality: quality || '1080p',
+            startDateTime,
+            endDateTime
         });
 
         console.log(`Schedule created: ${schedule.title}`);
@@ -125,6 +124,44 @@ router.post('/:id/toggle', (req, res) => {
     } catch (error) {
         console.error('Error toggling schedule:', error);
         res.status(500).json({ error: 'Failed to toggle schedule' });
+    }
+});
+
+/**
+ * POST /api/schedules/:id/start - Manually start streaming for a schedule
+ */
+router.post('/:id/start', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const result = await schedulerService.startScheduleStream(id);
+
+        if (!result.success) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        res.json({ success: true, message: `Stream started for schedule: ${result.schedule.title}` });
+    } catch (error) {
+        console.error('Error starting schedule stream:', error);
+        res.status(500).json({ error: 'Failed to start stream' });
+    }
+});
+
+/**
+ * POST /api/schedules/:id/stop - Manually stop streaming for a schedule
+ */
+router.post('/:id/stop', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const result = await schedulerService.stopScheduleStream(id);
+
+        if (!result.success) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        res.json({ success: true, message: `Stream stopped for schedule: ${result.schedule.title}` });
+    } catch (error) {
+        console.error('Error stopping schedule stream:', error);
+        res.status(500).json({ error: 'Failed to stop stream' });
     }
 });
 
