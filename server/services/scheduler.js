@@ -8,6 +8,10 @@ const SCHEDULES_FILE = path.join(__dirname, '../data/schedules.json');
 // Scheduler check interval (every minute)
 const CHECK_INTERVAL = 60000;
 
+// Timezone offset for WIB (Jakarta) - UTC+7
+// Server VPS biasanya menggunakan UTC, jadi kita perlu konversi
+const WIB_OFFSET_HOURS = 7;
+
 // Track running schedule streams
 const runningScheduleStreams = new Map();
 
@@ -204,14 +208,47 @@ async function stopScheduleStream(id) {
 }
 
 /**
+ * Get current time in WIB (Jakarta timezone)
+ * VPS biasanya menggunakan UTC, jadi kita konversi ke WIB
+ */
+function getNowInWIB() {
+    const now = new Date();
+    // Cek apakah server sudah dalam WIB atau masih UTC
+    const serverOffset = now.getTimezoneOffset(); // dalam menit, negatif untuk timezones ahead of UTC
+
+    // Jika server sudah dalam WIB (offset = -420 menit = -7 jam), tidak perlu konversi
+    if (serverOffset === -420) {
+        return now;
+    }
+
+    // Jika server dalam UTC (offset = 0), konversi ke WIB
+    // WIB = UTC + 7 jam
+    const wibTime = new Date(now.getTime() + (WIB_OFFSET_HOURS * 60 * 60 * 1000) + (serverOffset * 60 * 1000));
+    return wibTime;
+}
+
+/**
  * Check if current time is within schedule datetime range
+ * startDateTime dan endDateTime dari frontend dalam format datetime-local (tanpa timezone)
+ * Kita asumsikan user memasukkan waktu dalam WIB
  */
 function isWithinScheduleTime(startDateTime, endDateTime) {
-    const now = new Date();
+    const nowWIB = getNowInWIB();
+
+    // Parse datetime dari frontend (format: "2026-01-10T17:00")
+    // Ini adalah waktu WIB yang dimasukkan user
     const start = new Date(startDateTime);
     const end = new Date(endDateTime);
 
-    const isWithin = now >= start && now < end;
+    // Debug log
+    console.log(`      📍 Server time: ${new Date().toISOString()}`);
+    console.log(`      🕐 WIB time: ${nowWIB.toISOString().replace('Z', '+07:00')}`);
+    console.log(`      📅 Schedule: ${start.toISOString()} - ${end.toISOString()}`);
+
+    // Bandingkan waktu
+    const isWithin = nowWIB >= start && nowWIB < end;
+    console.log(`      ✓ Is within range: ${isWithin}`);
+
     return isWithin;
 }
 
