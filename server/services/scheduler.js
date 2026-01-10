@@ -83,6 +83,7 @@ function createSchedule(scheduleData) {
     };
     schedules.push(newSchedule);
     saveSchedules(schedules);
+    console.log(`📅 Schedule created: "${newSchedule.title}" | Start: ${newSchedule.startDateTime} | End: ${newSchedule.endDateTime}`);
     return newSchedule;
 }
 
@@ -134,10 +135,12 @@ function toggleSchedule(id) {
 async function startScheduleStream(id) {
     const schedule = getScheduleById(id);
     if (!schedule) {
+        console.error(`❌ Schedule ${id} not found`);
         return { success: false, error: 'Schedule not found' };
     }
 
     if (runningScheduleStreams.has(id)) {
+        console.log(`⚠️ Schedule "${schedule.title}" is already running`);
         return { success: false, error: 'Stream is already running' };
     }
 
@@ -151,6 +154,11 @@ async function startScheduleStream(id) {
         quality: schedule.quality
     };
 
+    console.log(`🚀 Starting stream for schedule "${schedule.title}"...`);
+    console.log(`   📺 Platform: ${schedule.platform}`);
+    console.log(`   🎬 Video: ${schedule.videoFile}`);
+    console.log(`   🔗 RTMP: ${schedule.rtmpUrl}`);
+
     try {
         await ffmpegService.startStream(streamConfig);
         runningScheduleStreams.set(id, true);
@@ -163,10 +171,10 @@ async function startScheduleStream(id) {
             saveSchedules(schedules);
         }
 
-        console.log(`✅ Manual start: Schedule "${schedule.title}" stream started`);
+        console.log(`✅ Schedule "${schedule.title}" stream started successfully!`);
         return { success: true, schedule };
     } catch (error) {
-        console.error(`❌ Failed to start schedule stream:`, error);
+        console.error(`❌ Failed to start schedule stream "${schedule.title}":`, error.message);
         return { success: false, error: error.message };
     }
 }
@@ -187,7 +195,7 @@ async function stopScheduleStream(id) {
     try {
         ffmpegService.stopStream(id);
         runningScheduleStreams.delete(id);
-        console.log(`✅ Manual stop: Schedule "${schedule.title}" stream stopped`);
+        console.log(`✅ Schedule "${schedule.title}" stream stopped`);
         return { success: true, schedule };
     } catch (error) {
         console.error(`❌ Failed to stop schedule stream:`, error);
@@ -202,7 +210,9 @@ function isWithinScheduleTime(startDateTime, endDateTime) {
     const now = new Date();
     const start = new Date(startDateTime);
     const end = new Date(endDateTime);
-    return now >= start && now < end;
+
+    const isWithin = now >= start && now < end;
+    return isWithin;
 }
 
 /**
@@ -212,25 +222,47 @@ function checkSchedules() {
     const schedules = loadSchedules();
     const now = new Date();
 
-    for (const schedule of schedules) {
-        if (!schedule.active) continue;
-        if (!schedule.startDateTime || !schedule.endDateTime) continue;
+    console.log(`\n⏰ [${now.toLocaleString('id-ID')}] Checking ${schedules.length} schedule(s)...`);
 
+    if (schedules.length === 0) {
+        return;
+    }
+
+    for (const schedule of schedules) {
+        const startTime = new Date(schedule.startDateTime);
+        const endTime = new Date(schedule.endDateTime);
         const isRunning = runningScheduleStreams.has(schedule.id);
         const shouldRun = isWithinScheduleTime(schedule.startDateTime, schedule.endDateTime);
-        const endTime = new Date(schedule.endDateTime);
+
+        console.log(`   📋 "${schedule.title}"`);
+        console.log(`      Active: ${schedule.active} | Running: ${isRunning} | ShouldRun: ${shouldRun}`);
+        console.log(`      Now: ${now.toISOString()}`);
+        console.log(`      Start: ${startTime.toISOString()} | End: ${endTime.toISOString()}`);
+
+        if (!schedule.active) {
+            console.log(`      ⏸️ Schedule is paused, skipping`);
+            continue;
+        }
+
+        if (!schedule.startDateTime || !schedule.endDateTime) {
+            console.log(`      ⚠️ Missing start/end datetime, skipping`);
+            continue;
+        }
 
         if (shouldRun && !isRunning) {
             // Should be running - start stream
-            console.log(`⏰ Auto-start: Schedule "${schedule.title}" starting...`);
+            console.log(`      ▶️ AUTO-START: Time is within range, starting stream...`);
             startScheduleStream(schedule.id);
         } else if (!shouldRun && isRunning) {
             // Past end time - stop stream
-            console.log(`⏰ Auto-stop: Schedule "${schedule.title}" ending...`);
+            console.log(`      ⏹️ AUTO-STOP: Time is outside range, stopping stream...`);
             stopScheduleStream(schedule.id);
-        } else if (now > endTime && !isRunning) {
-            // Past end time and not running - deactivate one-time schedules
-            // Keep active for recurring or manual restart later
+        } else if (shouldRun && isRunning) {
+            console.log(`      ✅ Stream is running as expected`);
+        } else if (now < startTime) {
+            console.log(`      ⏳ Waiting for start time (in ${Math.round((startTime - now) / 60000)} minutes)`);
+        } else if (now >= endTime) {
+            console.log(`      ⏹️ Schedule has ended`);
         }
     }
 }
@@ -239,10 +271,19 @@ function checkSchedules() {
  * Start the scheduler service
  */
 function startScheduler() {
-    console.log('📅 Starting stream scheduler service...');
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📅 Live24Jam Scheduler Service Starting...');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`   Check interval: ${CHECK_INTERVAL / 1000} seconds`);
+    console.log(`   Server time: ${new Date().toLocaleString('id-ID')}`);
+    console.log(`   Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('');
 
     // Initial check after 5 seconds
     setTimeout(() => {
+        console.log('📅 Running initial schedule check...');
         checkSchedules();
     }, 5000);
 
@@ -251,7 +292,7 @@ function startScheduler() {
         checkSchedules();
     }, CHECK_INTERVAL);
 
-    console.log(`📅 Scheduler running, checking every ${CHECK_INTERVAL / 1000}s`);
+    console.log(`📅 Scheduler active, checking every ${CHECK_INTERVAL / 1000}s`);
 }
 
 // Start scheduler on module load
